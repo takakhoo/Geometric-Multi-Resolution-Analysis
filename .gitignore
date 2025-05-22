@@ -1,6 +1,6 @@
 # ignore logging experiments datasets
-logging/*
-experiments/*
+# logging/*
+# experiments/*
 datasets/*
 
 
