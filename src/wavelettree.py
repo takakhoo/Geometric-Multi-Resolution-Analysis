@@ -7,6 +7,7 @@ import numpy as np
 # PYTHON PROJECT IMPORTS
 import os
 from .helpers import node_function, rand_pca
+from .utils import *
 
 WaveletNodeType = "WaveLetNode"
 
@@ -271,3 +272,73 @@ class WaveletTree(object):
             for node in nodes:
                 node.make_transform(X.T, self.manifold_dims[j], self.max_dim,
                                     self.shelf, self.thresholds[j], self.precisions[j])
+
+def my_fgwt(wavelet_tree, X):
+    J = depth(wavelet_tree.root)
+    leafs = get_leafs(wavelet_tree.root)
+
+    Qjx = [None] * X.shape[0]
+    max_lvl = 0
+    for leaf in leafs:
+        data_idx  = int(leaf.idxs[0])
+        # print(int(data_idx))
+
+        pjx = leaf.basis @ (X[data_idx:data_idx+1,:].T-leaf.center)
+        qjx = leaf.wav_basis  @ leaf.basis.T @ pjx
+        Qjx[data_idx]=[qjx]
+
+        pJx = pjx
+        
+        p = path(leaf)
+
+        # pjx = pJx
+        # ct = 0
+        lvl_counter = len(p)
+        # print('lvl_counter', lvl_counter)   
+        # print('lvl_counter', lvl_counter)
+        for n in reversed(p[1:-1]):
+            pjx = n.basis @ leaf.basis.T @ pJx + \
+                    n.basis @ ( leaf.center - n.center ) 
+            # print(n.wav_basis.shape, n.basis.T.shape, pjx.shape)
+            qjx = n.wav_basis @ n.basis.T @ pjx
+            Qjx[data_idx].append(qjx)
+            # print('a')
+            # lvl_counter-=1
+            # print('done', lvl_counter)
+            # pJx = pJx + p.basis @ (p.center - p.parent.center)
+            # print(qjx.shape)
+        n = p[0]
+        pjx = n.basis @ leaf.basis.T @ pJx + n.basis @ ( leaf.center - n.center ) 
+        qjx = pjx
+        Qjx[data_idx].append(qjx)
+        Qjx[data_idx] = list(reversed(Qjx[data_idx]))
+    return Qjx
+
+
+def my_igwt(wavelet_tree, gmra_q_coeff,shape):
+    J_max = depth(wavelet_tree.root)
+
+    X_recon = np.zeros(shape, dtype=np.float64)
+    # idx_reconstructed  = []
+    for leaf in get_leafs(wavelet_tree.root):
+        data_idx  = leaf.idxs[0]
+        # print('reconstructing', data_idx)
+        # idx_reconstructed.append(data_idx)
+        # print('data_idx', data_idx)
+        chain = path(leaf)
+        
+        ct=-1
+
+        Qjx = leaf.wav_basis.T @ gmra_q_coeff[data_idx][ct] + leaf.wav_consts
+
+        new_chain = chain[1:-1]
+        for jj, n in reversed(list(enumerate(new_chain))):
+            # print(len(gmra_q_coeff[data_idx]))
+            ct-=1
+            Qjx += (n.wav_basis.T @ gmra_q_coeff[data_idx][ct] + n.wav_consts +
+                    new_chain[jj-1].basis.T @ new_chain[jj-1].basis @ Qjx)
+            # print(ct)
+        ct-=1
+        Qjx += chain[0].basis.T@ gmra_q_coeff[data_idx][ct] + chain[0].center 
+        X_recon[data_idx:data_idx+1,:] = Qjx.T
+    return X_recon
