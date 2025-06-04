@@ -434,6 +434,15 @@ class CoverTree(object):
 
         print_node(self.root, 0)
 
+    # def traverse_print(self):
+    #     def traverse_node(node, level):
+    #         if isinstance(node, CoverTree._LeafNode):
+    #             yield (level, node.ctr_idx, node.idx, node.radius)
+    #         else:
+    #             yield (level, node.ctr_idx, None, node.radius)
+    #             for child in node.children:
+    #                 yield from traverse_node(child, level + 1)
+
     def _query(self, p, k=1, eps=0, distance_upper_bound=np.inf):
         if not self.root:
             return []
@@ -460,7 +469,7 @@ class CoverTree(object):
             epsfac = 1 / (1 + eps)
 
         while q:
-            print(q)
+            # print(q)
             min_distance, dist_to_ctr, node = heappop(q)
             if isinstance(node, CoverTree._LeafNode):
                 # brute-force
@@ -547,12 +556,12 @@ class CoverTree(object):
             elif k > 1:
                 dd = np.empty(retshape + (k,), dtype=float)
                 dd.fill(np.inf)
-                ii = np.empty(retshape + (k,), dtype=np.int)
+                ii = np.empty(retshape + (k,), dtype=int)
                 ii.fill(self.n)
             elif k == 1:
                 dd = np.empty(retshape, dtype=float)
                 dd.fill(np.inf)
-                ii = np.empty(retshape, dtype=np.int)
+                ii = np.empty(retshape, dtype=int)
                 ii.fill(self.n)
             else:
                 raise ValueError("Requested %s nearest neighbors; "
@@ -588,7 +597,7 @@ class CoverTree(object):
             elif k > 1:
                 dd = np.empty(k, dtype=float)
                 dd.fill(np.inf)
-                ii = np.empty(k, dtype=np.int)
+                ii = np.empty(k, dtype=int)
                 ii.fill(self.n)
                 for j in range(len(hits)):
                     dd[j], ii[j] = hits[j]
