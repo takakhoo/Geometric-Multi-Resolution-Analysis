@@ -26,6 +26,9 @@ class DyadicTreeNode:
         self.parent = parent 
         self.fake_node = False 
 
+        self.node_k = None  # this will be used to store the node in the CoverTree
+        self.node_j = None  # this will be used to store the node in the CoverTree
+
     def add_child(self, child_node):
         self.children.append(child_node)
 

@@ -157,7 +157,6 @@ class WaveletTree(object):
 
         self.inverse = inverse
 
-        self.dyadic_node_to_wavelet_node = {}
         self.j_k_to_wavelet_node = {}
 
         print('info: computing basis and wavelets for dyadic tree of height', dyadic_tree.height)
@@ -192,8 +191,8 @@ class WaveletTree(object):
             node_j          = 0,
             node_k          = 0
         )
-
-        self.dyadic_node_to_wavelet_node[cell_root] = self.root
+        cell_root.node_j = 0
+        cell_root.node_k = 0
         self.j_k_to_wavelet_node[(0, 0)] = self.root
                                 
 
@@ -209,7 +208,6 @@ class WaveletTree(object):
             for cell, node in zip(current_cells, current_nodes):
                 # print('info: making wavelet node for cell', cell.idxs, 'at level', level)
                 # print('info: cell have children:', len(cell.children))
-                self.dyadic_node_to_wavelet_node[cell] = node
                 for child_idx, child_cell in enumerate(cell.children):
                     new_node            = WaveletNode(
                         idxs            = np.sort(child_cell.idxs),
@@ -224,7 +222,9 @@ class WaveletTree(object):
                         node_k          = k_counter
                     )
 
-                    self.dyadic_node_to_wavelet_node[child_cell] = new_node
+                    child_cell.node_j = level
+                    child_cell.node_k = k_counter
+
                     self.j_k_to_wavelet_node[(level, k_counter)] = new_node
                     k_counter += 1
 
@@ -271,12 +271,15 @@ class WaveletTree(object):
         Returns:
         leafs: list of WaveletNodeType objects corresponding to the leaf nodes
 
-        TODO:
-        we dont need the dyanic_node_to_wavelet_node mapping, we can juse j k mapping 
+        
+        The pipe line when a new data point is like this:
+        Say we have x, we need to find the dyadic tree leaf that is closest to x
+        and then need to find the wavelet node that corresponds to that leaf.
+
         '''
         leafs = []
         cover_leafs = self.dyadic_tree.query_leaf(X)
-        wavelet_leafs = [self.dyadic_node_to_wavelet_node[leaf] for leaf in cover_leafs]
+        wavelet_leafs = [self.j_k_to_wavelet_node[(leaf.node_j, leaf.node_k)] for leaf in cover_leafs]
         
         return wavelet_leafs
 
