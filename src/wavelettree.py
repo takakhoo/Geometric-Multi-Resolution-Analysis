@@ -18,7 +18,6 @@ class WaveletNode(object):
                  manifold_dim: int,
                  max_dim: int,
                  is_leaf: bool,
-                 shelf = None,
                  threshold: float = 0.5,
                  precision: float = 1e-2, inverse = False,
                  node_j=-1, node_k=-1) -> None:
@@ -33,8 +32,8 @@ class WaveletNode(object):
         # basis is the pca basis
         # sigmas is the pca singular values
         # print('computing basis for cell j,k:', node_j, node_k, 'with size:', self.idxs.shape,'pts')
-        self.node_j= node_j
-        self.node_k=node_k
+        self.node_j = node_j
+        self.node_k = node_k
 
 
         #self.Z only for debug purpose
@@ -48,33 +47,10 @@ class WaveletNode(object):
             manifold_dim,
             max_dim,
             is_leaf,
-            shelf=shelf,
             threshold=threshold,
             precision=precision, 
             inverse=inverse
         )
-
-        # debug only, make sure that X[idxs,:] is the same as pca reconstruct
-        # x_orig = np.atleast_2d(X[idxs,:])
-        # multiply with sqrt of size because for somereason the scale it in pca
-        # x_hat = np.sqrt(self.size) *  self.basis.T @ np.diag(self.sigmas[:len(self.sigmas)-1])[:self.basis.T.shape[1]] @ self.Z + self.center
-
-
-        # print('difference:', np.linalg.norm(x_orig.T - x_hat))  
-        # assert np.linalg.norm(x_orig.T - x_hat) < .1, 'reconstruct fail'
-        # print('number of basis', self.basis.shape[0])
-        # print('reconstruction error:', np.linalg.norm(X[idxs,:] - x_hat))
-
-        # self.center, self.size, self.radius, self.basis, self.sigmas, self.Z = no(
-        #     np.atleast_2d(X[idxs,:]),
-        #     manifold_dim,
-        #     max_dim,
-        #     is_leaf,
-        #     shelf=shelf,
-        #     threshold=threshold,
-        #     precision=precision
-        # )
-
 
         self.wav_basis: np.ndarray = None
         self.wav_sigmas: np.ndarray = None
@@ -86,7 +62,6 @@ class WaveletNode(object):
                        X: np.ndarray,
                        manifold_dim: int,
                        max_dim: int,
-                       shelf = None,
                        threshold: float = 0.5,
                        precision: float = 1e-2) -> None:
         '''
@@ -157,7 +132,6 @@ class WaveletTree(object):
                  X: np.ndarray,
                  manifold_dims: Union[int, np.ndarray],
                  max_dim: int,
-                 shelf = None,
                  thresholds: Union[float, np.ndarray] = 0.5,
                  precisions: Union[float, np.ndarray] = 1e-2,
                  inverse = False) -> None:
@@ -168,26 +142,30 @@ class WaveletTree(object):
         '''
 
         if not isinstance(manifold_dims, np.ndarray):
-            self.manifold_dims = np.ones(dyadic_tree.height, dtype=int)*\
-                                 int(manifold_dims)
+            self.manifold_dims = np.ones(dyadic_tree.height, dtype=int)* int(manifold_dims)
         if not isinstance(thresholds, np.ndarray):
             self.thresholds = np.ones(dyadic_tree.height, dtype=float) * thresholds
         if not isinstance(precisions, np.ndarray):
             self.precisions = np.ones(dyadic_tree.height, dtype=float) * precisions
+
         self.max_dim: int = max_dim
-        self.shelf = shelf
 
         self.height: int = dyadic_tree.height
+
+        self.dyadic_tree = dyadic_tree
         self.root: WaveletNode = None
-        self.num_nodes: int = 0
+
         self.inverse = inverse
+
+        self.dyadic_node_to_wavelet_node = {}
+        self.j_k_to_wavelet_node = {}
 
         print('info: computing basis and wavelets for dyadic tree of height', dyadic_tree.height)
         print('info: this may take time..')
-
+        
         self.make_basis(dyadic_tree, X)
         self.make_wavelets(X)
-
+       
     def make_basis(self,
                    dyadic_tree,
                    X: np.ndarray) -> None:
@@ -208,24 +186,30 @@ class WaveletTree(object):
             manifold_dim    = self.manifold_dims[0],
             max_dim         = self.max_dim,
             is_leaf         = len(cell_root.children) == 0,
-            shelf           = self.shelf,
             threshold       = self.thresholds[0],
             precision       = self.precisions[0],
             inverse         = self.inverse,
             node_j          = 0,
             node_k          = 0
         )
+
+        self.dyadic_node_to_wavelet_node[cell_root] = self.root
+        self.j_k_to_wavelet_node[(0, 0)] = self.root
                                 
-        self.num_nodes += 1
 
         current_cells = [cell_root]
         current_nodes = [self.root]
 
-        for level in range(1, dyadic_tree.height):
+        for level in range(1, dyadic_tree.height+1):
             next_cells = list()
             next_nodes = list()
 
+            k_counter = 0 
+
             for cell, node in zip(current_cells, current_nodes):
+                # print('info: making wavelet node for cell', cell.idxs, 'at level', level)
+                # print('info: cell have children:', len(cell.children))
+                self.dyadic_node_to_wavelet_node[cell] = node
                 for child_idx, child_cell in enumerate(cell.children):
                     new_node            = WaveletNode(
                         idxs            = np.sort(child_cell.idxs),
@@ -233,17 +217,19 @@ class WaveletTree(object):
                         manifold_dim    = self.manifold_dims[level],
                         max_dim         = self.max_dim,
                         is_leaf         = len(child_cell.children) == 0,
-                        shelf           = self.shelf,
                         threshold       = self.thresholds[level],
                         precision       = self.precisions[level],
                         inverse         = self.inverse,
                         node_j          = level,
-                        node_k          = child_idx
+                        node_k          = k_counter
                     )
+
+                    self.dyadic_node_to_wavelet_node[child_cell] = new_node
+                    self.j_k_to_wavelet_node[(level, k_counter)] = new_node
+                    k_counter += 1
 
                     new_node.parent = node
                     node.children.append(new_node)
-                    self.num_nodes += 1
 
                     next_cells.append(child_cell)
                     next_nodes.append(new_node)
@@ -270,12 +256,29 @@ class WaveletTree(object):
 
         for j in range(self.height-1, -1, -1):
             # built transforms
-            print('info: making transforms at level', j)    
+            # print('info: making transforms at level', j)    
             nodes = nodes_at_layers[j]
             # print("layer %s" % j)
             for node in nodes:
                 node.make_transform(X.T, self.manifold_dims[j], self.max_dim,
-                                    self.shelf, self.thresholds[j], self.precisions[j])
+                                     self.thresholds[j], self.precisions[j])
+
+    
+    def query_leaf(self, X: np.ndarray):
+        '''
+        Query the leaf nodes for the given data points
+        X: data points, [n, d]
+        Returns:
+        leafs: list of WaveletNodeType objects corresponding to the leaf nodes
+
+        TODO:
+        we dont need the dyanic_node_to_wavelet_node mapping, we can juse j k mapping 
+        '''
+        leafs = []
+        cover_leafs = self.dyadic_tree.query_leaf(X)
+        wavelet_leafs = [self.dyadic_node_to_wavelet_node[leaf] for leaf in cover_leafs]
+        
+        return wavelet_leafs
 
     def fgwt(self, X):
         '''
@@ -285,81 +288,91 @@ class WaveletTree(object):
         Qjx: list of lists, where each list corresponds to a data point
         and contains the wavelet coefficients at each level of the tree.
 
+        This implement the algorithm in Figure 3.
         '''
-        wavelet_tree = self
-        J = depth(wavelet_tree.root)
-        leafs = get_leafs(wavelet_tree.root)
-
+        leafs    = self.query_leaf(X)
+        leafs_jk= [(leaf.node_j, leaf.node_k) for leaf in leafs]
         Qjx = [None] * X.shape[0]
-        max_lvl = 0
-        for leaf in leafs:
-            data_idx  = int(leaf.idxs[0])
-            # print(int(data_idx))
 
-            pjx = leaf.basis @ (X[data_idx:data_idx+1,:].T-leaf.center)
+        for idx, leaf in enumerate(leafs):
+            x = X[idx].reshape(1, -1)  #  a row
+            pjx = leaf.basis @ (x.T-leaf.center) 
             qjx = leaf.wav_basis  @ leaf.basis.T @ pjx
-            Qjx[data_idx]=[qjx]
+
+            Qjx[idx]=[qjx]
 
             pJx = pjx
             
             p = path(leaf)
 
-            # pjx = pJx
-            # ct = 0
-            lvl_counter = len(p)
-            # print('lvl_counter', lvl_counter)   
-            # print('lvl_counter', lvl_counter)
             for n in reversed(p[1:-1]):
                 pjx = n.basis @ leaf.basis.T @ pJx + \
                         n.basis @ ( leaf.center - n.center ) 
-                # print(n.wav_basis.shape, n.basis.T.shape, pjx.shape)
                 qjx = n.wav_basis @ n.basis.T @ pjx
-                Qjx[data_idx].append(qjx)
-                # print('a')
-                # lvl_counter-=1
-                # print('done', lvl_counter)
-                # pJx = pJx + p.basis @ (p.center - p.parent.center)
-                # print(qjx.shape)
+                Qjx[idx].append(qjx)
+
             n = p[0]
             pjx = n.basis @ leaf.basis.T @ pJx + n.basis @ ( leaf.center - n.center ) 
             qjx = pjx
-            Qjx[data_idx].append(qjx)
-            Qjx[data_idx] = list(reversed(Qjx[data_idx]))
-        return Qjx
+            Qjx[idx].append(qjx)
+            Qjx[idx] = list(reversed(Qjx[idx]))
+        return Qjx, leafs_jk
 
-
-    def igwt(self, gmra_q_coeff,shape):
+    def igwt(self, gmra_q_coeff, leaves_j_k ,shape):
         '''
         Compute the inverse gmra wavelet transform
         gmra_q_coeff: list of lists, where each list corresponds to a data point
         and contains the wavelet coefficients at each level of the tree.
         shape: shape of the original data points, [n, d]
-
+        Implement the algorithm in Figure 4.
         '''
-        wavelet_tree = self
-        J_max = depth(wavelet_tree.root)
-
         X_recon = np.zeros(shape, dtype=np.float64)
-        # idx_reconstructed  = []
-        for leaf in get_leafs(wavelet_tree.root):
-            data_idx  = leaf.idxs[0]
-            # print('reconstructing', data_idx)
-            # idx_reconstructed.append(data_idx)
-            # print('data_idx', data_idx)
-            chain = path(leaf)
+
+        # iterate over data points
+        for i in range(len(gmra_q_coeff)):
+            # coefficient and leaf node for this data
+            coeffs = list(reversed(gmra_q_coeff[i]))# leaf -> root
+            leaf   = self.j_k_to_wavelet_node[leaves_j_k[i]]
+            lvl_from_leaf = 0 
+
+            # begin reconstruct
+            # leaves level treat differently
+            Qjx    = leaf.wav_basis.T @ coeffs[lvl_from_leaf] + leaf.wav_consts
+            leaf   = leaf.parent
+            lvl_from_leaf += 1
+
+            while leaf.parent is not None:
+                Qjx +=( leaf.wav_basis.T @ coeffs[lvl_from_leaf] + leaf.wav_consts +
+                        leaf.parent.basis.T @ leaf.parent.basis @ Qjx)
+                leaf = leaf.parent
+                lvl_from_leaf += 1
             
-            ct=-1
+            # root level also treat differently
+            Qjx += leaf.basis.T @ coeffs[lvl_from_leaf] + leaf.center
 
-            Qjx = leaf.wav_basis.T @ gmra_q_coeff[data_idx][ct] + leaf.wav_consts
-
-            new_chain = chain[1:-1]
-            for jj, n in reversed(list(enumerate(new_chain))):
-                # print(len(gmra_q_coeff[data_idx]))
-                ct-=1
-                Qjx += (n.wav_basis.T @ gmra_q_coeff[data_idx][ct] + n.wav_consts +
-                        new_chain[jj-1].basis.T @ new_chain[jj-1].basis @ Qjx)
-                # print(ct)
-            ct-=1
-            Qjx += chain[0].basis.T@ gmra_q_coeff[data_idx][ct] + chain[0].center 
-            X_recon[data_idx:data_idx+1,:] = Qjx.T
+            X_recon[i:i+1,:] = Qjx.T
         return X_recon
+                    
+        # old implementation:                
+        # for leaf in get_leafs(wavelet_tree.root):
+        #     data_idx  = leaf.idxs[0]
+        #     # print('reconstructing', data_idx)
+        #     # idx_reconstructed.append(data_idx)
+        #     # print('data_idx', data_idx)
+        #     chain = path(leaf)
+            
+        #     ct=-1
+
+        #     Qjx = leaf.wav_basis.T @ gmra_q_coeff[data_idx][ct] + leaf.wav_consts
+
+        #     new_chain = chain[1:-1]
+        #     for jj, n in reversed(list(enumerate(new_chain))):
+        #         # print(len(gmra_q_coeff[data_idx]))
+        #         ct-=1
+        #         Qjx += (n.wav_basis.T @ gmra_q_coeff[data_idx][ct] + n.wav_consts +
+        #                 new_chain[jj-1].basis.T @ new_chain[jj-1].basis @ Qjx)
+        #         # print(ct)
+        #     ct-=1
+        #     Qjx += chain[0].basis.T@ gmra_q_coeff[data_idx][ct] + chain[0].center 
+        #     X_recon[data_idx:data_idx+1,:] = Qjx.T
+        # return X_recon
