@@ -1,7 +1,4 @@
 import numpy as np
-from .helpers import node_function, rand_pca
-from .utils import path
-
 # our own implementation of DyadicTree and DyadicTreeNode using Python
 # DyadicTreenNode will have point_indices point to indexes in dataset, and a list of children of type DyadicTreeNode
 # DyadicTree will be constructed from the CoverTree.
@@ -28,19 +25,9 @@ class DyadicTreeNode:
         self.children = []
         self.parent = parent 
         self.fake_node = False 
-        self.node_k = None
-        self.node_j = None
 
-        # Wavelet-related attributes
-        self.center = None
-        self.size = None
-        self.radius = None
-        self.basis = None
-        self.sigmas = None
-        self.Z = None
-        self.wav_basis = None
-        self.wav_sigmas = None
-        self.wav_consts = None
+        self.node_k = None  # this will be used to store the node in the CoverTree
+        self.node_j = None  # this will be used to store the node in the CoverTree
 
     def add_child(self, child_node):
         self.children.append(child_node)
@@ -51,43 +38,6 @@ class DyadicTreeNode:
     def __len__(self):
         return len(self.children)
     
-    def compute_basis(self, X, manifold_dim=0, max_dim=None, is_leaf=False, threshold=0.5, precision=1e-2, inverse=False):
-        # Set max_dim default to X.shape[1] if not provided
-        if max_dim is None:
-            max_dim = X.shape[1]
-        self.center, self.size, self.radius, self.basis, self.sigmas, self.Z = node_function(
-            np.atleast_2d(X[self.idxs,:]),
-            manifold_dim,
-            max_dim,
-            is_leaf,
-            threshold=threshold,
-            precision=precision, 
-            inverse=inverse
-        )
-
-    def make_transform(self, X, manifold_dim=0, max_dim=None, threshold=0.5, precision=1e-2):
-        # Set max_dim default to X.shape[1] if not provided
-        if max_dim is None:
-            max_dim = X.shape[1]
-        Phijx = self.basis
-        for c in self.children:
-            if c.basis is not None and np.prod(c.basis.shape) >= 1:
-                Phij1x = c.basis
-                Y = Phij1x - Phij1x @ Phijx.T @ Phijx
-                U, s, _ = rand_pca(Y.T, min(min(X.shape), max_dim))
-                wav_dims = (s > threshold).sum(dtype=np.int8)
-                if wav_dims > 0:
-                    c.wav_basis = U[:,:wav_dims].T
-                    c.wav_sigmas = s[:wav_dims]
-                else:
-                    c.wav_basis = np.zeros_like(U[:,:0].T)
-                    c.wav_sigmas = np.zeros_like(s[:0])
-                tjx = c.center - self.center
-                c.wav_consts = tjx - Phijx.T @ Phijx @ tjx
-            else:
-                c.wav_basis = np.zeros((X.shape[0], 0)).T
-                c.wav_consts = 0
-
 class DyadicTree:
     def __init__(self, cover_tree):
         if cover_tree.n == 0:
@@ -98,9 +48,6 @@ class DyadicTree:
         # underlying cover tree
         self.cover_tree = cover_tree
         self.idx_to_leaf_node = {}
-
-        # Add jk to node mapping
-        self.jk_to_node = {}
 
         self.build_tree(self.root, cover_tree.root)
 
@@ -113,10 +60,7 @@ class DyadicTree:
         Recursively build the DyadicTree from the CoverTree. 
         Remember to update idx_to_leaf_node mapping.
         """
-        # Assign node_j and node_k for jk mapping
-        node.node_j = level - 1
-        node.node_k = getattr(cover_node, 'ctr_idx', None) if hasattr(cover_node, 'ctr_idx') else None
-        self.jk_to_node[(node.node_j, node.node_k)] = node
+
 
         if level+1 > self.height:
             self.height = level+1
@@ -124,9 +68,6 @@ class DyadicTree:
         if hasattr(cover_node, 'idx'):
             # the leaf node will have idx
             child_node = DyadicTreeNode(cover_node.idx, parent=node)
-            child_node.node_j = level
-            child_node.node_k = getattr(cover_node, 'ctr_idx', None) if hasattr(cover_node, 'ctr_idx') else None
-            self.jk_to_node[(child_node.node_j, child_node.node_k)] = child_node
 
             self.idx_to_leaf_node[cover_node.idx[0]] = child_node
 
@@ -134,10 +75,6 @@ class DyadicTree:
         else:
             for child in cover_node.children:
                 child_node = DyadicTreeNode(get_idx_sublevel(child), parent=node)
-                child_node.node_j = level
-                child_node.node_k = getattr(child, 'ctr_idx', None) if hasattr(child, 'ctr_idx') else None
-                self.jk_to_node[(child_node.node_j, child_node.node_k)] = child_node
-
                 node.add_child(child_node)
                 self.build_tree(child_node, child, level + 1)
 
@@ -224,77 +161,7 @@ class DyadicTree:
         leaf_nodes = [self.idx_to_leaf_node[idx] for idx in nn_idx]
         return leaf_nodes
 
-    def make_basis(self, X, manifold_dims, max_dim, thresholds, precisions, inverse=False):
-        # Recursively compute basis for all nodes
-        def _make_basis(node, level):
-            is_leaf = len(node.children) == 0
-            node.compute_basis(
-                X,
-                manifold_dim=manifold_dims[level],
-                max_dim=max_dim,
-                is_leaf=is_leaf,
-                threshold=thresholds[level],
-                precision=precisions[level],
-                inverse=inverse
-            )
-            for child in node.children:
-                _make_basis(child, level+1)
-        _make_basis(self.root, 0)
+        
+        
 
-    def make_wavelets(self, X, manifold_dims, max_dim, thresholds, precisions):
-        # Recursively compute wavelet transforms for all nodes
-        def _make_wavelets(node, level):
-            node.make_transform(X, manifold_dims[level], max_dim, thresholds[level], precisions[level])
-            for child in node.children:
-                _make_wavelets(child, level+1)
-        _make_wavelets(self.root, 0)
-
-    def fgwt(self, X, manifold_dims, max_dim, thresholds, precisions):
-        # Forward GMRA wavelet transform
-        leafs = self.query_leaf(X)
-        leafs_jk = [(leaf.node_j, leaf.node_k) for leaf in leafs]
-        Qjx = [None] * X.shape[0]
-        for idx, leaf in enumerate(leafs):
-            x = X[idx].reshape(1, -1)
-            pjx = leaf.basis @ (x.T - leaf.center)
-            qjx = leaf.wav_basis @ leaf.basis.T @ pjx
-            Qjx[idx] = [qjx]
-            pJx = pjx
-            p = path(leaf)
-            for n in reversed(p[1:-1]):
-                pjx = n.basis @ leaf.basis.T @ pJx + n.basis @ (leaf.center - n.center)
-                qjx = n.wav_basis @ n.basis.T @ pjx
-                Qjx[idx].append(qjx)
-            n = p[0]
-            pjx = n.basis @ leaf.basis.T @ pJx + n.basis @ (leaf.center - n.center)
-            qjx = pjx
-            Qjx[idx].append(qjx)
-            Qjx[idx] = list(reversed(Qjx[idx]))
-        return Qjx, leafs_jk
-
-    def igwt(self, gmra_q_coeff, leaves_j_k, shape):
-        # Inverse GMRA wavelet transform
-        X_recon = np.zeros(shape, dtype=np.float64)
-        for i in range(len(gmra_q_coeff)):
-            coeffs = list(reversed(gmra_q_coeff[i]))
-            leaf = self.query_leaf_by_jk(leaves_j_k[i])
-            lvl_from_leaf = 0
-            Qjx = leaf.wav_basis.T @ coeffs[lvl_from_leaf] + leaf.wav_consts
-            leaf = leaf.parent
-            lvl_from_leaf += 1
-            while leaf.parent is not None:
-                Qjx += (leaf.wav_basis.T @ coeffs[lvl_from_leaf] + leaf.wav_consts +
-                        leaf.parent.basis.T @ leaf.parent.basis @ Qjx)
-                leaf = leaf.parent
-                lvl_from_leaf += 1
-            Qjx += leaf.basis.T @ coeffs[lvl_from_leaf] + leaf.center
-            X_recon[i:i+1,:] = Qjx.T
-        return X_recon
-
-    def query_leaf_by_jk(self, jk):
-        # Use the jk_to_node dictionary for fast lookup
-        return self.jk_to_node.get(jk, None)
-
-
-
-
+        
