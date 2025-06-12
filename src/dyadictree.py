@@ -5,9 +5,9 @@ import os
 import logging
 from .helpers import node_function, rand_pca
 from .utils import *
+from .dyadictreenode import DyadicTreeNode
 
-# our own implementation of DyadicTree and DyadicTreeNode using Python
-# DyadicTreenNode will have point_indices point to indexes in dataset, and a list of children of type DyadicTreeNode
+# our own implementation of DyadicTree using Python
 # DyadicTree will be constructed from the CoverTree.
 # root node will be at CoverTree max scale (root node).
 
@@ -26,73 +26,6 @@ def get_idx_sublevel(node):
         else:
             return np.array([], dtype=int)
 
-class DyadicTreeNode:
-    def __init__(self, idxs, parent):
-        self.idxs = idxs
-        self.children = []
-        self.parent = parent 
-        self.fake_node = False 
-
-        self.node_k = None  # this will be used to store the node in the CoverTree
-        self.node_j = None  # this will be used to store the node in the CoverTree
-        
-        # Wavelet-related attributes
-        self.is_leaf = False
-        self.center = None
-        self.size = None
-        self.radius = None
-        self.basis = None
-        self.sigmas = None
-        self.Z = None
-        self.wav_basis = None
-        self.wav_sigmas = None
-        self.wav_consts = None
-        self.CelWavCoeffs = {}
-
-    def add_child(self, child_node):
-        self.children.append(child_node)
-
-    def __getitem__(self, index):
-        return self.children[index]
-    
-    def __len__(self):
-        return len(self.children)
-    
-    def make_transform(self,
-                       X: np.ndarray,
-                       manifold_dim: int,
-                       max_dim: int,
-                       threshold: float = 0.5,
-                       precision: float = 1e-2) -> None:
-        '''
-        X: (d,n)
-        '''
-        # from construct_localGeometricWavelets.m
-        Phijx = self.basis
-
-        for i, c in enumerate(self.children):
-            if np.prod(c.basis.shape) >= 1:
-                # this is (I-Pjx)V_{j+1,x}
-                Phij1x = c.basis  # phi{j+1,x}
-                
-                Y: np.ndarray = Phij1x - Phij1x @ Phijx.T @ Phijx
-            
-                U,s,_ = rand_pca(Y.T, min(min(X.shape), max_dim))
-                wav_dims = (s > threshold).sum(dtype=np.int8)
-
-                if wav_dims > 0:
-                    c.wav_basis = U[:,:wav_dims].T # (nxd)
-                    c.wav_sigmas = s[:wav_dims]
-                else:
-                    c.wav_basis = np.zeros_like(U[:,:0].T)  # (nxd)
-                    c.wav_sigmas = np.zeros_like(s[:0])
-
-                tjx = c.center - self.center# (2.14)
-                c.wav_consts = tjx - Phijx.T @ Phijx @ tjx
-            else:
-                c.wav_basis = np.zeros((X.shape[0], 0)).T # (nxd)
-                c.wav_consts =  0
-    
 class DyadicTree:
     def __init__(self, cover_tree, X=None, manifold_dims=None, max_dim=None, 
                  thresholds=0.5, precisions=1e-2, inverse=False):
@@ -104,33 +37,37 @@ class DyadicTree:
         # underlying cover tree
         self.cover_tree = cover_tree
         self.idx_to_leaf_node = {}
-
-        # Wavelet-related attributes
         self.j_k_to_node = {}
         self.inverse = inverse
         
-        self._setup_wavelet_params(manifold_dims, max_dim, thresholds, precisions)
-            
+        # Build basic tree structure first
         self.build_tree(self.root, cover_tree.root)
         
+        # Setup wavelet functionality if data is provided
         if X is not None and manifold_dims is not None and max_dim is not None:
+            self._setup_wavelet_params(manifold_dims, max_dim, thresholds, precisions)
             self.make_basis(X)
             self.make_wavelets(X)
 
     def _setup_wavelet_params(self, manifold_dims, max_dim, thresholds, precisions):
-        if not isinstance(manifold_dims, np.ndarray):
-            self.manifold_dims = np.ones(self.height, dtype=int) * int(manifold_dims)
-        else:
-            self.manifold_dims = manifold_dims
-        if not isinstance(thresholds, np.ndarray):
-            self.thresholds = np.ones(self.height, dtype=float) * thresholds
-        else:
-            self.thresholds = thresholds
-        if not isinstance(precisions, np.ndarray):
-            self.precisions = np.ones(self.height, dtype=float) * precisions
-        else:
-            self.precisions = precisions
+        """Setup wavelet parameters with proper broadcasting"""
+        def _broadcast_param(param, name):
+            if param is None:
+                return None
+            if not isinstance(param, np.ndarray):
+                return np.full(self.height, param, dtype=type(param))
+            return param
+        
+        self.manifold_dims = _broadcast_param(manifold_dims, "manifold_dims")
+        self.thresholds = _broadcast_param(thresholds, "thresholds") 
+        self.precisions = _broadcast_param(precisions, "precisions")
         self.max_dim = max_dim
+
+    def _get_param_for_level(self, param_array, level):
+        """Get parameter value for given level with bounds checking"""
+        if param_array is None:
+            return None
+        return param_array[min(level, len(param_array) - 1)]
 
     def build_tree(self, node, cover_node, level=1):
         """
@@ -244,91 +181,76 @@ class DyadicTree:
 
     def make_basis(self, X: np.ndarray) -> None:
         '''
-        make basis for wavelet functionality
+        Recursively compute basis for all nodes in the tree
         '''
+        print('info: making wavelet tree')
         logging.debug("Starting basis construction for wavelet tree")
         
+        # Setup root node
         self.root.is_leaf = len(self.root.children) == 0
         self.root.node_j = 0
         self.root.node_k = 0
         
-        logging.debug(f"Computing basis for root node with {len(self.root.idxs)} points")
-        
-        # Compute basis for root
-        self.root.center, self.root.size, self.root.radius, self.root.basis, self.root.sigmas, self.root.Z = node_function(
-            np.atleast_2d(X[self.root.idxs,:]),
-            self.manifold_dims[0],
-            self.max_dim,
-            self.root.is_leaf,
-            threshold=self.thresholds[0],
-            precision=self.precisions[0], 
-            inverse=self.inverse
-        )
-        
-        logging.debug(f"Root basis shape: {self.root.basis.shape}, sigmas: {len(self.root.sigmas)}")
+        # Compute basis for root using node's make_basis method
+        self.root.make_basis(X, self.manifold_dims[0], self.max_dim,
+                            self.thresholds[0], self.precisions[0], self.inverse)
         
         self.j_k_to_node[(0, 0)] = self.root
-                                
-        current_nodes = [self.root]
+        
+        # Recursively process all levels
+        self._make_basis_recursive(self.root, X, level=0)
 
-        for level in range(1, self.height+1):
-            logging.debug(f"Processing level {level} with {len(current_nodes)} parent nodes")
-            next_nodes = list()
-            k_counter = 0 
+    def _make_basis_recursive(self, node: DyadicTreeNode, X: np.ndarray, level: int) -> None:
+        '''
+        Recursive helper for make_basis
+        '''
+        if level + 1 >= self.height:
+            return
+            
+        logger.debug(f"Processing level {level+1} with {len(node.children)} children")
+        
+        # Calculate k_counter for this level
+        existing_nodes_at_level = [n for (j, k), n in self.j_k_to_node.items() if j == level + 1]
+        k_counter = len(existing_nodes_at_level)
+        
+        for child in node.children:
+            child.is_leaf = len(child.children) == 0
+            child.node_j = level + 1
+            child.node_k = k_counter
+            
+            # Use helper method to get parameters
+            child.make_basis(X, 
+                           self._get_param_for_level(self.manifold_dims, level + 1),
+                           self.max_dim,
+                           self._get_param_for_level(self.thresholds, level + 1),
+                           self._get_param_for_level(self.precisions, level + 1),
+                           self.inverse)
 
-            for node in current_nodes:
-                for child in node.children:
-                    child.is_leaf = len(child.children) == 0
-                    child.node_j = level
-                    child.node_k = k_counter
-                    
-                    logging.debug(f"Computing basis for node (j={level}, k={k_counter}) with {len(child.idxs)} points, is_leaf={child.is_leaf}")
-                    
-                    # Compute basis for child
-                    child.center, child.size, child.radius, child.basis, child.sigmas, child.Z = node_function(
-                        np.atleast_2d(X[child.idxs,:]),
-                        self.manifold_dims[level] if level < len(self.manifold_dims) else self.manifold_dims[-1],
-                        self.max_dim,
-                        child.is_leaf,
-                        threshold=self.thresholds[level] if level < len(self.thresholds) else self.thresholds[-1],
-                        precision=self.precisions[level] if level < len(self.precisions) else self.precisions[-1],
-                        inverse=self.inverse
-                    )
-
-                    logging.debug(f"Node (j={level}, k={k_counter}) basis shape: {child.basis.shape}")
-
-                    self.j_k_to_node[(level, k_counter)] = child
-                    k_counter += 1
-                    next_nodes.append(child)
-
-            current_nodes = next_nodes
-            logging.debug(f"Level {level} completed with {len(next_nodes)} nodes")
+            self.j_k_to_node[(level + 1, k_counter)] = child
+            k_counter += 1
+            
+            # Recursively process children
+            self._make_basis_recursive(child, X, level + 1)
 
     def make_wavelets(self, X: np.ndarray) -> None:
         print('info: making wavelets')
-        logging.debug("Starting wavelet construction")
+        logger.debug("Starting wavelet construction")
         
-        nodes_at_layers = [[self.root]]
-        current_layer = nodes_at_layers[0]
-        for level in range(1, self.height):
-            next_layer = list()
-            for node in current_layer:
-                for child in node.children:
-                    next_layer.append(child)
-            nodes_at_layers.append(next_layer)
-            current_layer = next_layer
-            logging.debug(f"Layer {level} has {len(next_layer)} nodes")
+        # Build nodes_at_layers more efficiently
+        nodes_at_layers = [[] for _ in range(self.height)]
+        for (j, k), node in self.j_k_to_node.items():
+            nodes_at_layers[j].append(node)
 
         for j in range(self.height-1, -1, -1):
             nodes = nodes_at_layers[j]
-            logging.debug(f"Processing wavelets for level {j} with {len(nodes)} nodes")
+            logger.debug(f"Processing wavelets for level {j} with {len(nodes)} nodes")
             for i, node in enumerate(nodes):
-                logging.debug(f"Making transform for node {i+1}/{len(nodes)} at level {j}")
+                logger.debug(f"Making transform for node {i+1}/{len(nodes)} at level {j}")
                 node.make_transform(X.T, 
-                                  self.manifold_dims[j] if j < len(self.manifold_dims) else self.manifold_dims[-1], 
+                                  self._get_param_for_level(self.manifold_dims, j), 
                                   self.max_dim,
-                                  self.thresholds[j] if j < len(self.thresholds) else self.thresholds[-1], 
-                                  self.precisions[j] if j < len(self.precisions) else self.precisions[-1])
+                                  self._get_param_for_level(self.thresholds, j), 
+                                  self._get_param_for_level(self.precisions, j))
 
     def fgwt(self, X):
         '''
@@ -340,6 +262,98 @@ class DyadicTree:
         leafs_jk = [(leaf.node_j, leaf.node_k) for leaf in leafs]
         
         logging.debug(f"Found {len(leafs)} leaf nodes, levels range: j={min(jk[0] for jk in leafs_jk)} to j={max(jk[0] for jk in leafs_jk)}")
+        
+        Qjx = [None] * X.shape[0]
+
+        for idx, leaf in enumerate(leafs):
+            if idx % 20 == 0:  # Log every 20th point to avoid spam
+                logging.debug(f"Processing point {idx+1}/{len(leafs)}, leaf at (j={leaf.node_j}, k={leaf.node_k})")
+            
+            x = X[idx].reshape(1, -1)  #  a row
+            pjx = leaf.basis @ (x.T-leaf.center) 
+            qjx = leaf.wav_basis @ leaf.basis.T @ pjx
+
+            Qjx[idx]=[qjx]
+            pJx = pjx
+            
+            p = path(leaf)
+            logging.debug(f"Point {idx}: path length {len(p)}, leaf->root traversal")
+
+            for n in reversed(p[1:-1]):
+                pjx = n.basis @ leaf.basis.T @ pJx + \
+                        n.basis @ ( leaf.center - n.center ) 
+                qjx = n.wav_basis @ n.basis.T @ pjx
+                Qjx[idx].append(qjx)
+                logging.debug(f"Point {idx}: processed node at (j={n.node_j}, k={n.node_k}), qjx shape: {qjx.shape}")
+
+            n = p[0]
+            pjx = n.basis @ leaf.basis.T @ pJx + n.basis @ ( leaf.center - n.center ) 
+            qjx = pjx
+            Qjx[idx].append(qjx)
+            Qjx[idx] = list(reversed(Qjx[idx]))
+            
+            logging.debug(f"Point {idx}: completed, total coefficients at {len(Qjx[idx])} levels")
+        
+        logging.debug("Forward GMRA wavelet transform completed")
+        return Qjx, leafs_jk
+
+    def igwt(self, gmra_q_coeff, leaves_j_k, shape):
+        '''
+        Compute the inverse gmra wavelet transform
+        '''
+        logging.debug(f"Starting inverse GMRA wavelet transform for {len(gmra_q_coeff)} data points")
+        logging.debug(f"Reconstruction target shape: {shape}")
+        
+        X_recon = np.zeros(shape, dtype=np.float64)
+
+        # iterate over data points
+        for i in range(len(gmra_q_coeff)):
+            if i % 20 == 0:  # Log every 20th point to avoid spam
+                logging.debug(f"Reconstructing point {i+1}/{len(gmra_q_coeff)}")
+            
+            # coefficient and leaf node for this data
+            coeffs = list(reversed(gmra_q_coeff[i]))# leaf -> root
+            leaf = self.j_k_to_node[leaves_j_k[i]]
+            lvl_from_leaf = 0
+            
+            logging.debug(f"Point {i}: starting from leaf (j={leaf.node_j}, k={leaf.node_k}), {len(coeffs)} coefficient levels")
+
+            # begin reconstruct
+            # leaves level treat differently
+            Qjx = leaf.wav_basis.T @ coeffs[lvl_from_leaf] + leaf.wav_consts
+            logging.debug(f"Point {i}: leaf reconstruction, Qjx shape: {Qjx.shape}")
+            
+            leaf = leaf.parent
+            lvl_from_leaf += 1
+
+            while leaf.parent is not None:
+                Qjx += (leaf.wav_basis.T @ coeffs[lvl_from_leaf] + leaf.wav_consts +
+                        leaf.parent.basis.T @ leaf.parent.basis @ Qjx)
+                logging.debug(f"Point {i}: intermediate level (j={leaf.node_j}, k={leaf.node_k}), Qjx shape: {Qjx.shape}")
+                leaf = leaf.parent
+                lvl_from_leaf += 1
+            
+            # root level also treat differently
+            Qjx += leaf.basis.T @ coeffs[lvl_from_leaf] + leaf.center
+            logging.debug(f"Point {i}: root level reconstruction, final Qjx shape: {Qjx.shape}")
+
+            X_recon[i:i+1,:] = Qjx.T
+            
+            if i % 20 == 0:
+                recon_norm = np.linalg.norm(X_recon[i])
+                logging.debug(f"Point {i}: reconstruction norm: {recon_norm:.6f}")
+        
+        logging.debug("Inverse GMRA wavelet transform completed")
+        return X_recon
+
+            X_recon[i:i+1,:] = Qjx.T
+            
+            if i % 20 == 0:
+                recon_norm = np.linalg.norm(X_recon[i])
+                logging.debug(f"Point {i}: reconstruction norm: {recon_norm:.6f}")
+        
+        logging.debug("Inverse GMRA wavelet transform completed")
+        return X_recon
         
         Qjx = [None] * X.shape[0]
 
