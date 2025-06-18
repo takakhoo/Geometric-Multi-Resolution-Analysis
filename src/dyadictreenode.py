@@ -10,24 +10,21 @@ class DyadicTreeNode:
         self.parent = parent 
         self.fake_node = False 
 
-        # Node identification
-        self.node_k = None
-        self.node_j = None
-        self.is_leaf = False
+        self.node_k = None  # this will be used to store the node in the CoverTree
+        self.node_j = None  # this will be used to store the node in the CoverTree
         
-        # Basis-related attributes
+        # Wavelet-related attributes
+        self.is_leaf = False
         self.center = None
         self.size = None
         self.radius = None
         self.basis = None
         self.sigmas = None
-        self.Z = None  # Only used for debug, consider removing if not needed
-        
-        # Wavelet-related attributes  
+        self.Z = None
         self.wav_basis = None
         self.wav_sigmas = None
         self.wav_consts = None
-        # Remove CelWavCoeffs if not used
+        self.CelWavCoeffs = {}
 
     def add_child(self, child_node):
         self.children.append(child_node)
@@ -58,37 +55,37 @@ class DyadicTreeNode:
         
         logging.debug(f"Node (j={self.node_j}, k={self.node_k}) basis shape: {self.basis.shape}, sigmas: {len(self.sigmas)}")
     
-    def make_transform(self, X: np.ndarray, manifold_dim: int, max_dim: int, 
-                       threshold: float = 0.5, precision: float = 1e-2) -> None:
+    def make_transform(self,
+                       X: np.ndarray,
+                       manifold_dim: int,
+                       max_dim: int,
+                       threshold: float = 0.5,
+                       precision: float = 1e-2) -> None:
         '''
-        Compute wavelet transform for this node's children
         X: (d,n)
         '''
-        if not hasattr(self, 'basis') or self.basis is None:
-            return
-            
+        # from construct_localGeometricWavelets.m
         Phijx = self.basis
 
-        for child in self.children:
-            if child.basis is None or np.prod(child.basis.shape) < 1:
-                child.wav_basis = np.zeros((X.shape[0], 0)).T
-                child.wav_consts = 0
-                continue
+        for i, c in enumerate(self.children):
+            if np.prod(c.basis.shape) >= 1:
+                # this is (I-Pjx)V_{j+1,x}
+                Phij1x = c.basis  # phi{j+1,x}
                 
-            # Compute orthogonal component: (I-Pjx)V_{j+1,x}
-            Phij1x = child.basis
-            Y = Phij1x - Phij1x @ Phijx.T @ Phijx
-        
-            U, s, _ = rand_pca(Y.T, min(min(X.shape), max_dim))
-            wav_dims = (s > threshold).sum(dtype=np.int8)
+                Y: np.ndarray = Phij1x - Phij1x @ Phijx.T @ Phijx
+            
+                U,s,_ = rand_pca(Y.T, min(min(X.shape), max_dim))
+                wav_dims = (s > threshold).sum(dtype=np.int8)
 
-            if wav_dims > 0:
-                child.wav_basis = U[:, :wav_dims].T
-                child.wav_sigmas = s[:wav_dims]
+                if wav_dims > 0:
+                    c.wav_basis = U[:,:wav_dims].T # (nxd)
+                    c.wav_sigmas = s[:wav_dims]
+                else:
+                    c.wav_basis = np.zeros_like(U[:,:0].T)  # (nxd)
+                    c.wav_sigmas = np.zeros_like(s[:0])
+
+                tjx = c.center - self.center# (2.14)
+                c.wav_consts = tjx - Phijx.T @ Phijx @ tjx
             else:
-                child.wav_basis = np.zeros((wav_dims, X.shape[0]))
-                child.wav_sigmas = np.zeros(0)
-
-            # Compute wavelet constants
-            tjx = child.center - self.center
-            child.wav_consts = tjx - Phijx.T @ Phijx @ tjx
+                c.wav_basis = np.zeros((X.shape[0], 0)).T # (nxd)
+                c.wav_consts =  0
