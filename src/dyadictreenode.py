@@ -4,6 +4,22 @@ import logging
 from .helpers import node_function, rand_pca
 
 class DyadicTreeNode:
+    @staticmethod
+    def get_idx_sublevel(node):
+        """
+        Get all the index of the nodes under node of a CoverTreeNode
+        :param node: node
+        :return: numpy 1d array of indices
+        """
+        if hasattr(node, 'idx'):
+            return node.idx
+        else:
+            idxs = [DyadicTreeNode.get_idx_sublevel(child) for child in node.children]
+            if idxs:
+                return np.concatenate(idxs)
+            else:
+                return np.array([], dtype=int)
+
     def __init__(self, idxs, parent):
         self.idxs = idxs
         self.children = []

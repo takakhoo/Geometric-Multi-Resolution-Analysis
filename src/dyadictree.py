@@ -11,27 +11,12 @@ from .dyadictreenode import DyadicTreeNode
 # DyadicTree will be constructed from the CoverTree.
 # root node will be at CoverTree max scale (root node).
 
-def get_idx_sublevel(node):
-    """
-    Get all the index of the nodes under node of a CoverTreeNode
-    :param node: node
-    :return: numpy 1d array of indices
-    """
-    if hasattr(node, 'idx'):
-        return node.idx
-    else:
-        idxs = [get_idx_sublevel(child) for child in node.children]
-        if idxs:
-            return np.concatenate(idxs)
-        else:
-            return np.array([], dtype=int)
-
 class DyadicTree:
     def __init__(self, cover_tree, X=None, manifold_dims=None, max_dim=None, 
                  thresholds=0.5, precisions=1e-2, inverse=False):
         if cover_tree.n == 0:
             raise ValueError("Cover tree is empty")
-        self.root = DyadicTreeNode(get_idx_sublevel(cover_tree.root), parent=None)
+        self.root = DyadicTreeNode(DyadicTreeNode.get_idx_sublevel(cover_tree.root), parent=None)
         self.height = 1
 
         # underlying cover tree
@@ -76,7 +61,7 @@ class DyadicTree:
         Recursively build the DyadicTree from the CoverTree. 
         Remember to update idx_to_leaf_node mapping.
         """
-        logging.debug(f"Building tree at level {level}, node indices: {get_idx_sublevel(cover_node)}")
+        logging.debug(f"Building tree at level {level}, node indices: {DyadicTreeNode.get_idx_sublevel(cover_node)}")
 
         if level >= self.height:
             self.height = level+1
@@ -93,7 +78,7 @@ class DyadicTree:
         else:
             logging.debug(f"Processing internal node at level {level} with {len(cover_node.children)} children")
             for i, child in enumerate(cover_node.children):
-                child_node = DyadicTreeNode(get_idx_sublevel(child), parent=node)
+                child_node = DyadicTreeNode(DyadicTreeNode.get_idx_sublevel(child), parent=node)
                 logging.debug(f"Created child {i+1}/{len(cover_node.children)} at level {level}")
                 node.add_child(child_node)
                 self.build_tree(child_node, child, level + 1)
