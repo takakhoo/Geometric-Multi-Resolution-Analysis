@@ -7,10 +7,6 @@ from .helpers import node_function, rand_pca
 from .utils import *
 from .dyadictreenode import DyadicTreeNode
 
-# our own implementation of DyadicTree using Python
-# DyadicTree will be constructed from the CoverTree.
-# root node will be at CoverTree max scale (root node).
-
 class DyadicTree:
     def __init__(self, cover_tree, X=None, manifold_dims=None, max_dim=None, 
                  thresholds=0.5, precisions=1e-2, inverse=False):
@@ -521,7 +517,3 @@ class DyadicTree:
         return self
 
     # ========== Original methods ==========
-
-
-
-
