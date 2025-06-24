@@ -95,7 +95,7 @@ class DyadicTree:
 
         traverse_from_node(self.root, level=0, only_print_level=only_print_level)
     
-    def plot_tree(self):
+    def plot_tree(self, show_basis_dim=False):
         '''
         plot the tree using matplotlib
         '''
@@ -107,7 +107,31 @@ class DyadicTree:
             Plot the node and its children.
             """
             color = 'red' if getattr(node, 'fake_node', False) else 'black'
-            ax.text(x, y, str(node.idxs), ha='center', va='center', fontsize=8, color=color)
+            
+            # Create the text to display
+            if show_basis_dim:
+                text_parts = [str(node.idxs)]
+                
+                # Add basis dimension if available
+                if hasattr(node, 'basis') and node.basis is not None:
+                    basis_dim = node.basis.shape[0]
+                    text_parts.append(f"dim={basis_dim}")
+                
+                # Add wavelet basis dimension if available
+                if hasattr(node, 'wav_basis') and node.wav_basis is not None:
+                    wav_basis_dim = node.wav_basis.shape[0]
+                    text_parts.append(f"wav={wav_basis_dim}")
+                
+                text = "\n".join(text_parts)
+            else:
+                text = str(node.idxs)
+            
+            ax.text(x, y, text, ha='center', va='center', fontsize=8, color=color)
+            
+            # Also plot (node_j, node_k) in red if the node has these attributes
+            if hasattr(node, 'node_j') and hasattr(node, 'node_k'):
+                jk_text = f"({node.node_j}, {node.node_k})"
+                ax.text(x, y - 0.02, jk_text, ha='center', va='center', fontsize=6, color='red')
             for i, child in enumerate(node.children):
                 child_x = x + (i - len(node.children) / 2) * 0.1
                 child_y = y - 0.1
@@ -128,7 +152,7 @@ class DyadicTree:
         """
         
         def grow_node(node, current_level):
-            if current_level+1 >= self.height:
+            if current_level >= self.height:
                 return
 
             if len(node.children) == 0:
@@ -246,21 +270,36 @@ class DyadicTree:
                                   self.thresholds[j] if j < len(self.thresholds) else self.thresholds[-1], 
                                   self.precisions[j] if j < len(self.precisions) else self.precisions[-1])
     
-    def fgwt_all_node(self, X):
-        '''
-        Compute the forward gmra wavelet transform for all nodes in the tree.
-        fgwt is only depends on computation from the leaf has x, traversing the tree to the root.
-        fgwt_all_node will compute basically the same thing, but for node that not in the path, it's 0
-        '''
-        logging.debug("Starting forward GMRA wavelet transform for all nodes")
+    def get_all_leafs(self) -> List[DyadicTreeNode]:
+        """
+        Get all leaf nodes in the tree by traversing from the root.
+        """
+        logging.debug("Retrieving all leaf nodes from the DyadicTree")
         
-        # for each node, determine the dimension of coefficients.
-        # the final dimension of coefficients is the sum of all dimensions of the nodes.
+        def traverse(node):
+            if len(node.children) == 0:
+                return [node]
+            else:
+                leafs = []
+                for child in node.children:
+                    leafs.extend(traverse(child))
+                return leafs
+        
+        all_leafs = traverse(self.root)
+        logging.debug(f"Found {len(all_leafs)} leaf nodes")
+        return all_leafs
+    
+    # def fgwt_all_node(self, X):
+    #     '''
+    #     Compute the forward gmra wavelet transform for all nodes in the tree.
+    #     fgwt is only depends on computation from the leaf has x, traversing the tree to the root.
+    #     fgwt_all_node will compute basically the same thing, but for node that not in the path, it's 0
+    #     '''
+    #     logging.debug("Starting forward GMRA wavelet transform for all nodes")
 
-        final_dim = 0 
-        
-        
-        
+    #     # get all the leafs in the tree by traverse
+    #     leafs = self.get_all_leafs()
+
 
 
 
@@ -383,9 +422,26 @@ class DyadicTree:
         # Learn basis and wavelets
         self.make_basis(X)
         self.make_wavelets(X)
+
+        # compute the dimension of the transformed data
+        self._return_shape = self._compute_return_shape(X.shape[0])
         
         self._is_fitted = True
         return self
+    
+    def _compute_return_shape(self):
+        """
+        Compute the shape of the transformed data based on the wavelet coefficients.
+        This would be the sum of the dimensions of the wavelet basis for all nodes.
+        
+        Returns
+        -------
+        return_shape : tuple
+            Shape of the transformed data.
+        """
+        # Assuming each leaf node contributes a fixed number of coefficients
+
+        return
     
     def fit_transform(self, X):
         """
