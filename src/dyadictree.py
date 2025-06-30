@@ -299,9 +299,45 @@ class DyadicTree:
 
     #     # get all the leafs in the tree by traverse
     #     leafs = self.get_all_leafs()
+           
+        
+            
 
+    def fgwt_batch(self, X):
+        """
+        Compute the forward gmra wavelet transform for all nodes in the tree.
+        Each data point will have coefficients for all nodes in the tree.
+        """
+        out = []
 
-
+        leafs = self.get_all_leafs()
+        # log the leafs j&k
+        logging.debug(f"Found {len(leafs)} leaf nodes for batch processing")
+        logging.debug(str([f"(j={leaf.node_j}, k={leaf.node_k})" for leaf in leafs]))
+        for leaf in leafs:
+            # batch processing
+            pjx = (X - leaf.center.T) @ leaf.basis.T   # ~> (B, d)
+            qjx = pjx @ leaf.basis @ leaf.wav_basis.T #  # ~> (B, d)
+            out.append(qjx)
+            logging.debug(f"Processed leaf (j={leaf.node_j}, k={leaf.node_k})")
+            pJx = pjx # ~> (B, d)
+            p = path(leaf)
+            for n in reversed(p[1:-1]):
+                pjx = pJx @ leaf.basis @ n.basis.T + \
+                    (leaf.center.T - n.center.T) @ n.basis.T # ~> (B, d)
+                qjx = pjx @ n.basis @ n.wav_basis.T # ~> (B, d)
+                out.append(qjx)
+            n = p[0] 
+            pjx = (leaf.center.T - n.center.T) @ n.basis.T + \
+                pJx @ leaf.basis @ n.basis.T # ~> (B, d)
+            qjx = pjx # ~> (B, d)
+            out.append(qjx)
+        
+        # remove tensor with 0 dimensions
+        out = [q for q in out if q.shape[1] > 0]
+        # stacking  (B, d1) (B d2) -> (B, d1+d2+...)
+        out = np.hstack(out)
+        return out
 
     def fgwt(self, X):
         '''
@@ -348,6 +384,50 @@ class DyadicTree:
         logging.debug("Forward GMRA wavelet transform completed")
         return Qjx, leafs_jk
 
+    def igwt_batch(self, Y, leaves_j_k, shape):
+        """
+        Compute the inverse gmra wavelet transform for all nodes in the tree.
+        Each data point will have coefficients for all nodes in the tree.
+
+        we determine the coefficent for each node by checking the basis's dimension
+        """
+
+        leafs =  self.get_all_leafs()
+        logging.debug(f"Found {len(leafs)} leaf nodes for batch processing")
+        logging.debug(str([f"(j={leaf.node_j}, k={leaf.node_k})" for leaf in leafs]))
+ 
+        coeff_dim = 0
+        X_hat = 0
+
+        X_hat_each_leaf = []
+        for leaf in leafs:
+            logging.debug(f"Processing leaf (j={leaf.node_j}, k={leaf.node_k})")
+            coeff = Y[:, coeff_dim:coeff_dim + leaf.wav_basis.shape[0]]
+            coeff_dim += leaf.wav_basis.shape[0]
+            logging.debug(f"Multiplying jk (j={leaf.node_j}, k={leaf.node_k}),\
+                with coeff from dimension {coeff_dim - leaf.wav_basis.shape[0]} to {coeff_dim}")
+
+            Qjx = coeff @ leaf.wav_basis + leaf.wav_consts.T
+            leaf = leaf.parent
+            while leaf.parent is not None:
+                coeff = Y[:, coeff_dim:coeff_dim + leaf.wav_basis.shape[0]]
+                coeff_dim += leaf.wav_basis.shape[0]
+                Qjx += (coeff @ leaf.wav_basis + leaf.wav_consts.T +
+                        Qjx @ leaf.parent.basis.T @ leaf.parent.basis)
+                logging.debug(f"Multiplying node (j={leaf.node_j}, k={leaf.node_k}),\
+                    with coeff from dimension {coeff_dim - leaf.wav_basis.shape[0]} to {coeff_dim}")
+                leaf = leaf.parent
+
+            coeff = Y[:, coeff_dim:coeff_dim + leaf.basis.shape[0]]
+            coeff_dim += leaf.basis.shape[0]
+            logging.debug(f"Multiplying root (j={leaf.node_j}, k={leaf.node_k}),\
+                with coeff from dimension {coeff_dim - leaf.basis.shape[0]} to {coeff_dim}")
+            Qjx = coeff @ leaf.basis + leaf.center.T + Qjx
+            X_hat += Qjx
+            X_hat_each_leaf.append(Qjx)
+        
+        return X_hat / len(leafs), X_hat_each_leaf
+ 
     def igwt(self, gmra_q_coeff, leaves_j_k, shape):
         '''
         Compute the inverse gmra wavelet transform
@@ -423,8 +503,8 @@ class DyadicTree:
         self.make_basis(X)
         self.make_wavelets(X)
 
-        # compute the dimension of the transformed data
-        self._return_shape = self._compute_return_shape(X.shape[0])
+        # # compute the dimension of the transformed data
+        # self._return_shape = self._compute_return_shape(X.shape[0])
         
         self._is_fitted = True
         return self

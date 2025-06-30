@@ -103,5 +103,5 @@ class DyadicTreeNode:
                 tjx = c.center - self.center# (2.14)
                 c.wav_consts = tjx - Phijx.T @ Phijx @ tjx
             else:
-                c.wav_basis = np.zeros((X.shape[0], 0)).T # (nxd)
-                c.wav_consts =  0
+                c.wav_basis  = np.zeros((X.shape[0], 0)).T # (nxd)
+                c.wav_consts = np.zeros((X.shape[0], 1))
