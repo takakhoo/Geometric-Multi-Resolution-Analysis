@@ -1,8 +1,7 @@
 import numpy as np
 from torchvision import datasets, transforms
 
-def load_dataset(flatten=False):
-    num_points = 10
+def load_dataset(flatten=False, num_points=1000):
     transform = transforms.Compose([
         transforms.ToTensor()
     ])

@@ -311,6 +311,7 @@ class DyadicTree:
         out = []
 
         leafs = self.get_all_leafs()
+
         # log the leafs j&k
         logging.debug(f"Found {len(leafs)} leaf nodes for batch processing")
         logging.debug(str([f"(j={leaf.node_j}, k={leaf.node_k})" for leaf in leafs]))
@@ -327,6 +328,7 @@ class DyadicTree:
                     (leaf.center.T - n.center.T) @ n.basis.T # ~> (B, d)
                 qjx = pjx @ n.basis @ n.wav_basis.T # ~> (B, d)
                 out.append(qjx)
+                logging.debug(f"Processed node (j={n.node_j}, k={n.node_k}), pjx shape: {pjx.shape}, qjx shape: {qjx.shape}")
             n = p[0] 
             pjx = (leaf.center.T - n.center.T) @ n.basis.T + \
                 pJx @ leaf.basis @ n.basis.T # ~> (B, d)
@@ -359,27 +361,33 @@ class DyadicTree:
             x = X[idx].reshape(1, -1)  #  a row
             pjx = leaf.basis @ (x.T-leaf.center) 
             qjx = leaf.wav_basis @ leaf.basis.T @ pjx
+            # log qjx
+            logging.debug(f"qjx: {qjx}")
 
             Qjx[idx]=[qjx]
             pJx = pjx
             
             p = path(leaf)
             logging.debug(f"Point {idx}: path length {len(p)}, leaf->root traversal")
+            logging.debug(f"Point {idx}: starting from leaf (j={leaf.node_j}, k={leaf.node_k}), pjx shape: {pjx.shape}, qjx shape: {qjx.shape}")
 
             for n in reversed(p[1:-1]):
                 pjx = n.basis @ leaf.basis.T @ pJx + \
                         n.basis @ ( leaf.center - n.center ) 
                 qjx = n.wav_basis @ n.basis.T @ pjx
+                logging.debug(f"qjx: {qjx}")
                 Qjx[idx].append(qjx)
                 logging.debug(f"Point {idx}: processed node at (j={n.node_j}, k={n.node_k}), qjx shape: {qjx.shape}")
 
             n = p[0]
             pjx = n.basis @ leaf.basis.T @ pJx + n.basis @ ( leaf.center - n.center ) 
             qjx = pjx
+            logging.debug(f"qjx: {qjx}")
             Qjx[idx].append(qjx)
             Qjx[idx] = list(reversed(Qjx[idx]))
             
             logging.debug(f"Point {idx}: completed, total coefficients at {len(Qjx[idx])} levels")
+            logging.debug(f"***")
         
         logging.debug("Forward GMRA wavelet transform completed")
         return Qjx, leafs_jk
@@ -393,6 +401,8 @@ class DyadicTree:
         """
 
         leafs =  self.get_all_leafs()
+
+        # log the leafs j&k
         logging.debug(f"Found {len(leafs)} leaf nodes for batch processing")
         logging.debug(str([f"(j={leaf.node_j}, k={leaf.node_k})" for leaf in leafs]))
  
@@ -473,9 +483,76 @@ class DyadicTree:
             if i % 20 == 0:
                 recon_norm = np.linalg.norm(X_recon[i])
                 logging.debug(f"Point {i}: reconstruction norm: {recon_norm:.6f}")
+            logging.debug(f"***")
         
         logging.debug("Inverse GMRA wavelet transform completed")
         return X_recon
+
+    def prune_tree_min_point(self, num_point):
+        """
+        Prune the tree by removing children that have fewer points than num_point.
+        This method runs from root down to bottom, removing children nodes if 
+        len(child.idxs) < num_point.
+        
+        Parameters
+        ----------
+        num_point : int
+            Minimum number of points required for a node to remain in the tree.
+            Children with fewer points will be removed.
+            
+        Returns
+        -------
+        self : DyadicTree
+            Returns the instance itself after pruning.
+        """
+        def _prune_node(node):
+            """Recursively prune children from a node."""
+            # Create a copy of children list to avoid modification during iteration
+            children_to_remove = []
+            
+            for child in node.children:
+                if len(child.idxs) < num_point:
+                    children_to_remove.append(child)
+                else:
+                    # Child has enough points, continue recursing
+                    _prune_node(child)
+            
+            # Remove children that don't meet the threshold
+            for child in children_to_remove:
+                node.children.remove(child)
+                child.parent = None
+                
+                # Update mappings - remove from idx_to_leaf_node if it's a leaf
+                if hasattr(child, 'idxs') and len(child.idxs) > 0:
+                    if child.idxs[0] in self.idx_to_leaf_node:
+                        del self.idx_to_leaf_node[child.idxs[0]]
+                
+                # Remove from j_k_to_node mapping if it exists
+                if hasattr(child, 'node_j') and hasattr(child, 'node_k'):
+                    key = (child.node_j, child.node_k)
+                    if key in self.j_k_to_node:
+                        del self.j_k_to_node[key]
+        
+        # Start pruning from the root
+        _prune_node(self.root)
+        
+        # Update tree height after pruning
+        self._update_tree_height()
+        
+        return self
+    
+    def _update_tree_height(self):
+        """Update the tree height after pruning."""
+        def _get_max_depth(node, current_depth=0):
+            if len(node.children) == 0:
+                return current_depth
+            max_child_depth = 0
+            for child in node.children:
+                child_depth = _get_max_depth(child, current_depth + 1)
+                max_child_depth = max(max_child_depth, child_depth)
+            return max_child_depth
+        
+        self.height = _get_max_depth(self.root) + 1
 
     # ========== Scikit-learn Style API ==========
     
