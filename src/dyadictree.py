@@ -64,13 +64,17 @@ class DyadicTree:
             logging.debug(f"Updated tree height to {self.height}")
 
         if hasattr(cover_node, 'idx'):
-            # the leaf node will have idx
-            child_node = DyadicTreeNode(cover_node.idx, parent=node)
-            logging.debug(f"Created leaf node at level {level} with indices: {cover_node.idx}")
-
-            self.idx_to_leaf_node[cover_node.idx[0]] = child_node
-
-            node.add_child(child_node)
+            # This cover_node is a leaf node - the current dyadic node should be the leaf
+            logging.debug(f"Cover node is a leaf with indices: {cover_node.idx}")
+            
+            # Update the current node's indices to match the leaf indices
+            node.idxs = cover_node.idx
+            
+            # Register this node as the leaf node in the mapping
+            for idx in cover_node.idx:
+                self.idx_to_leaf_node[idx] = node
+            
+            logging.debug(f"Registered leaf node at level {level} with indices: {cover_node.idx}")
         else:
             logging.debug(f"Processing internal node at level {level} with {len(cover_node.children)} children")
             for i, child in enumerate(cover_node.children):
@@ -80,24 +84,86 @@ class DyadicTree:
                 self.build_tree(child_node, child, level + 1)
 
     def traverse(self, only_print_level=None):
+        """
+        Traverse the tree and return nodes, optionally printing them.
+        
+        Parameters
+        ----------
+        only_print_level : int, optional
+            If specified, only include nodes at this level
+            
+        Returns
+        -------
+        list of DyadicTreeNode
+            List of nodes in the tree (filtered by level if specified)
+        """
+        nodes_list = []
+        
         def traverse_from_node(node, level=0, only_print_level=None):
             """
-            Print the tree, starting from the root node.
+            Traverse the tree, starting from the root node.
             At every level, use a single dash as level indicator.
             eg: root node has '-', child node has '--', etc.
-            If only_print_level is set, only print nodes at that level.
-
+            If only_print_level is set, only include nodes at that level.
             """
             if only_print_level is None or level == only_print_level:
+                nodes_list.append(node)
                 print("-" * (level + 1), node.idxs)
+            
             for child in node.children:
                 traverse_from_node(child, level + 1, only_print_level)
 
         traverse_from_node(self.root, level=0, only_print_level=only_print_level)
+        return nodes_list
     
-    def plot_tree(self, show_basis_dim=False):
+    def get_nodes_at_level(self, level):
+        """
+        Get all nodes at a specific level in the tree without printing.
+        
+        Parameters
+        ----------
+        level : int
+            The level to get nodes from (0 = root level)
+            
+        Returns
+        -------
+        list of DyadicTreeNode
+            List of nodes at the specified level
+        """
+        nodes_list = []
+        
+        def traverse_silent(node, current_level=0):
+            if current_level == level:
+                nodes_list.append(node)
+            for child in node.children:
+                traverse_silent(child, current_level + 1)
+        
+        traverse_silent(self.root)
+        return nodes_list
+    
+    def get_all_nodes(self):
+        """
+        Get all nodes in the tree without printing.
+        
+        Returns
+        -------
+        list of DyadicTreeNode
+            List of all nodes in the tree
+        """
+        nodes_list = []
+        
+        def traverse_silent(node):
+            nodes_list.append(node)
+            for child in node.children:
+                traverse_silent(child)
+        
+        traverse_silent(self.root)
+        return nodes_list
+    
+    def plot_tree(self, show_basis_dim=False, start_node=None):
         '''
         plot the tree using matplotlib
+        start_node will be considered as the root of the tree to plot, root is used if None.
         '''
         import matplotlib.pyplot as plt
         from matplotlib.patches import FancyBboxPatch
@@ -141,8 +207,111 @@ class DyadicTree:
         fig, ax = plt.subplots(figsize=(10, 6))
         ax.set_title('Structure')
         ax.axis('off')
-        plot_node(self.root, 0, 0, ax)
+        if start_node is None:
+            plot_node(self.root, 0, 0, ax)
+        else:
+            plot_node(start_node, 0, 0, ax)
         plt.show()
+
+    def plot_tree_graphviz(self, show_basis_dim=False, start_node=None, filename=None, format='png'):
+        '''
+        Plot the tree using graphviz
+        start_node will be considered as the root of the tree to plot, root is used if None.
+        
+        Parameters
+        ----------
+        show_basis_dim : bool, default=False
+            Whether to show basis dimensions in the node labels
+        start_node : DyadicTreeNode, optional
+            The node to use as root for plotting. If None, uses self.root
+        filename : str, optional
+            If provided, saves the plot to this file. Otherwise displays it
+        format : str, default='png'
+            Output format for the plot ('png', 'svg', 'pdf', etc.)
+        '''
+        try:
+            import graphviz
+        except ImportError:
+            raise ImportError("graphviz is required for plot_tree_graphviz. Install it with: pip install graphviz")
+        
+        # Create a new directed graph
+        dot = graphviz.Digraph(comment='DyadicTree Structure')
+        dot.attr(rankdir='TB')  # Top to bottom layout
+        
+        # Counter for unique node IDs
+        node_counter = [0]
+        
+        def add_node_to_graph(node, parent_id=None):
+            """
+            Add a node and its children to the graphviz graph.
+            """
+            # Create unique node ID
+            node_id = f"node_{node_counter[0]}"
+            node_counter[0] += 1
+            
+            # Create node label
+            if show_basis_dim:
+                label_parts = [str(node.idxs)]
+                
+                # Add basis dimension if available
+                if hasattr(node, 'basis') and node.basis is not None:
+                    basis_dim = node.basis.shape[0]
+                    label_parts.append(f"dim={basis_dim}")
+                
+                # Add wavelet basis dimension if available
+                if hasattr(node, 'wav_basis') and node.wav_basis is not None:
+                    wav_basis_dim = node.wav_basis.shape[0]
+                    label_parts.append(f"wav={wav_basis_dim}")
+                
+                label = "\\n".join(label_parts)
+            else:
+                label = str(node.idxs)
+            
+            # Add (node_j, node_k) if available
+            if hasattr(node, 'node_j') and hasattr(node, 'node_k'):
+                label += f"\\n({node.node_j}, {node.node_k})"
+            
+            # Set node color based on whether it's a fake node
+            color = 'red' if getattr(node, 'fake_node', False) else 'black'
+            fillcolor = 'lightcoral' if getattr(node, 'fake_node', False) else 'lightblue'
+            
+            # Add node to graph
+            dot.node(node_id, label=label, 
+                    color=color, 
+                    fillcolor=fillcolor,
+                    style='filled',
+                    shape='box')
+            
+            # Add edge from parent if this is not the root
+            if parent_id is not None:
+                dot.edge(parent_id, node_id)
+            
+            # Recursively add children
+            for child in node.children:
+                add_node_to_graph(child, node_id)
+        
+        # Start from the specified node or root
+        root_node = start_node if start_node is not None else self.root
+        add_node_to_graph(root_node)
+        
+        # Handle output
+        if filename is not None:
+            # Save to file
+            dot.render(filename, format=format, cleanup=True)
+            print(f"Tree plot saved to {filename}.{format}")
+        else:
+            # Display in notebook or return source
+            try:
+                # Try to display in Jupyter notebook
+                from IPython.display import display
+                display(dot)
+            except ImportError:
+                # If not in notebook, print the source or save to temp file
+                print("Graphviz source:")
+                print(dot.source)
+                print("\nTo view the graph, save it to a file using the filename parameter")
+        
+        return dot
 
     def grow_tree(self):
         """
@@ -299,9 +468,6 @@ class DyadicTree:
 
     #     # get all the leafs in the tree by traverse
     #     leafs = self.get_all_leafs()
-           
-        
-            
 
     def fgwt_batch(self, X):
         """
@@ -491,14 +657,18 @@ class DyadicTree:
     def prune_tree_min_point(self, num_point):
         """
         Prune the tree by removing children that have fewer points than num_point.
-        This method runs from root down to bottom, removing children nodes if 
-        len(child.idxs) < num_point.
+        When removing children, their indices are merged into the parent node,
+        and the idx_to_leaf_node mapping is updated to point to the parent.
+        
+        Note: After pruning, idx_to_leaf_node entries may point to internal nodes
+        (not necessarily leaves) if their children were pruned. This is the intended
+        behavior as these parent nodes now represent the pruned data points.
         
         Parameters
         ----------
         num_point : int
             Minimum number of points required for a node to remain in the tree.
-            Children with fewer points will be removed.
+            Children with fewer points will be removed and their indices merged into parent.
             
         Returns
         -------
@@ -519,19 +689,24 @@ class DyadicTree:
             
             # Remove children that don't meet the threshold
             for child in children_to_remove:
+                # Merge all indices from child and its subtree into parent
+                logging.debug(f"Pruning child node with indices {child.idxs} from parent node with indices {node.idxs}")
+                _merge_subtree_indices(child, node)
+                
+                # Remove child from parent's children list
                 node.children.remove(child)
                 child.parent = None
-                
-                # Update mappings - remove from idx_to_leaf_node if it's a leaf
-                if hasattr(child, 'idxs') and len(child.idxs) > 0:
-                    if child.idxs[0] in self.idx_to_leaf_node:
-                        del self.idx_to_leaf_node[child.idxs[0]]
-                
-                # Remove from j_k_to_node mapping if it exists
-                if hasattr(child, 'node_j') and hasattr(child, 'node_k'):
-                    key = (child.node_j, child.node_k)
-                    if key in self.j_k_to_node:
-                        del self.j_k_to_node[key]
+
+        def _merge_subtree_indices(subtree_root, target_parent):
+            """
+            Update idx_to_leaf_node mapping to point child indices to the parent.
+            This recursively processes the entire subtree being pruned.
+            """
+            # Update idx_to_leaf_node mapping for all indices to point to target parent
+            for idx in subtree_root.idxs:
+                if idx in self.idx_to_leaf_node:
+                    self.idx_to_leaf_node[idx] = target_parent
+            
         
         # Start pruning from the root
         _prune_node(self.root)
@@ -553,7 +728,8 @@ class DyadicTree:
             return max_child_depth
         
         self.height = _get_max_depth(self.root) + 1
-
+    
+    
     # ========== Scikit-learn Style API ==========
     
     def fit(self, X):
