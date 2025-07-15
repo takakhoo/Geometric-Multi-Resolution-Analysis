@@ -414,7 +414,6 @@ class DyadicTree:
             self._make_basis_recursive(child, X, level + 1)
 
     def make_wavelets(self, X: np.ndarray) -> None:
-        print('info: making wavelets')
         logging.debug("Starting wavelet construction")
         
         nodes_at_layers = [[self.root]]
@@ -438,6 +437,13 @@ class DyadicTree:
                                   self.max_dim,
                                   self.thresholds[j] if j < len(self.thresholds) else self.thresholds[-1], 
                                   self.precisions[j] if j < len(self.precisions) else self.precisions[-1])
+        
+        # For convenience, set Ψ0,k := Φ0,k and w0,k := c0,k for k ∈K0.
+        logging.debug("Setting Ψ0,k and w0,k for convenience")
+        for i,c in enumerate(self.root.children):
+            c.wav_basis = self.root.basis
+            c.wav_consts = self.root.center.T
+
     
     def get_all_leafs(self) -> List[DyadicTreeNode]:
         """
