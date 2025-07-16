@@ -357,6 +357,64 @@ class DyadicTree:
         leaf_nodes = [self.idx_to_leaf_node[idx] for idx in nn_idx]
         return leaf_nodes
 
+    def query_leaf_by_center(self, X):
+        """
+        Query for the leaf that is closest to each data point by comparing distances
+        to leaf centers directly using vectorized operations.
+        
+        Parameters
+        ----------
+        X : numpy array of shape (n_samples, n_features)
+            Data points to query
+            
+        Returns
+        -------
+        leaf_nodes : list of DyadicTreeNode
+            List of leaf nodes closest to each data point
+        """
+        X = np.asarray(X)
+        if X.ndim == 1:
+            X = X.reshape(1, -1)
+        
+        # Get all leaf nodes
+        leafs = self.get_all_leafs()
+        
+        if not leafs:
+            raise ValueError("No leaf nodes found in the tree")
+        
+        # Extract centers from leaf nodes - shape (n_leafs, n_features)
+        leaf_centers = []
+        for leaf in leafs:
+            if hasattr(leaf, 'center') and leaf.center is not None:
+                leaf_centers.append(leaf.center.flatten())
+            else:
+                # If no center is available, use mean of data points at this leaf
+                # This requires accessing the original data, which might not be available
+                # For now, we'll raise an error
+                raise ValueError(f"Leaf node {leaf.idxs} does not have a center attribute")
+        
+        leaf_centers = np.array(leaf_centers)  # Shape: (n_leafs, n_features)
+        
+        # Method 1: Using scipy.spatial.distance.cdist (most efficient for large datasets)
+        try:
+            from scipy.spatial.distance import cdist
+            # distances shape: (n_samples, n_leafs)
+            distances = cdist(X, leaf_centers, metric='euclidean')
+        except ImportError:
+            # Method 2: Using numpy broadcasting (fallback if scipy not available)
+            # X shape: (n_samples, n_features)
+            # leaf_centers shape: (n_leafs, n_features)
+            # distances shape: (n_samples, n_leafs)
+            distances = np.linalg.norm(X[:, np.newaxis, :] - leaf_centers[np.newaxis, :, :], axis=2)
+        
+        # Find the index of closest leaf for each data point
+        closest_leaf_indices = np.argmin(distances, axis=1)
+        
+        # Get the corresponding leaf nodes
+        leaf_nodes = [leafs[idx] for idx in closest_leaf_indices]
+        
+        return leaf_nodes
+
     def make_basis(self, X: np.ndarray) -> None:
         '''
         Recursively compute basis for all nodes in the tree
@@ -439,10 +497,10 @@ class DyadicTree:
                                   self.precisions[j] if j < len(self.precisions) else self.precisions[-1])
         
         # For convenience, set Ψ0,k := Φ0,k and w0,k := c0,k for k ∈K0.
-        logging.debug("Setting Ψ0,k and w0,k for convenience")
-        for i,c in enumerate(self.root.children):
-            c.wav_basis = self.root.basis
-            c.wav_consts = self.root.center.T
+        # logging.debug("Setting Ψ0,k and w0,k for convenience")
+        # for i,c in enumerate(self.root.children):
+        #     c.wav_basis = self.root.basis
+        #     c.wav_consts = self.root.center.T
 
     
     def get_all_leafs(self) -> List[DyadicTreeNode]:
@@ -519,7 +577,10 @@ class DyadicTree:
         '''
         logging.debug(f"Starting forward GMRA wavelet transform for {X.shape[0]} data points")
         
-        leafs = self.query_leaf(X)
+        # leafs = self.query_leaf(X)
+        leafs = self.query_leaf_by_center(X)
+
+
         leafs_jk = [(leaf.node_j, leaf.node_k) for leaf in leafs]
         
         logging.debug(f"Found {len(leafs)} leaf nodes, levels range: j={min(jk[0] for jk in leafs_jk)} to j={max(jk[0] for jk in leafs_jk)}")
