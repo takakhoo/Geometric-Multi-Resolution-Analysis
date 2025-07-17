@@ -44,12 +44,21 @@ python gmra_classification_experiment.py --config-name=config_small
 
 # Use tuning configuration for hyperparameter exploration
 python gmra_classification_experiment.py --config-name=config_tuning
+
+# Use CIFAR-10 dataset
+python gmra_classification_experiment.py --config-name=config_cifar10
+
+# Use small CIFAR-10 configuration for quick testing
+python gmra_classification_experiment.py --config-name=config_cifar10_small
 ```
 
 ### Override Configuration Parameters
 ```bash
 # Override specific parameters
 python gmra_classification_experiment.py data.num_points=2000 gmra.leafsize=5
+
+# Override GMRA tree building parameters
+python gmra_classification_experiment.py gmra.tree_subset_ratio=0.05 gmra.min_points=20
 
 # Override classifier parameters
 python gmra_classification_experiment.py classifiers.random_forest.n_estimators=200
@@ -68,6 +77,12 @@ python gmra_classification_experiment.py --multirun gmra.leafsize=5,10,20
 
 # Run with different datasets sizes
 python gmra_classification_experiment.py --multirun data.num_points=500,1000,2000
+
+# Compare MNIST vs CIFAR-10
+python gmra_classification_experiment.py --multirun --config-name=config_small,config_cifar10_small
+
+# CIFAR-10 hyperparameter sweep
+python gmra_classification_experiment.py --config-name=config_cifar10 --multirun gmra.tree_subset_ratio=0.05,0.1,0.2
 ```
 
 ## Configuration Files
@@ -94,6 +109,7 @@ gmra:
   thresholds: 0.0
   precisions: 1e-2
   min_points: 10
+  tree_subset_ratio: 0.1  # Use 10% of training data for tree building
 
 classifiers:
   random_forest:
@@ -106,6 +122,8 @@ classifiers:
 
 - **`config_small.yaml`**: Quick testing with smaller dataset and fewer classifiers
 - **`config_tuning.yaml`**: Hyperparameter tuning with different parameter values
+- **`config_cifar10.yaml`**: CIFAR-10 dataset comparison (5000 samples)
+- **`config_cifar10_small.yaml`**: Quick CIFAR-10 testing (1000 samples)
 
 ### Creating Custom Configurations
 
@@ -125,11 +143,35 @@ data:
 gmra:
   leafsize: 15
   min_points: 15
+  tree_subset_ratio: 0.2  # Use 20% of training data for tree building
 ```
 
 Then run:
 ```bash
 python gmra_classification_experiment.py --config-name=config_custom
+```
+
+## Tree Building with Subset Data
+
+For memory efficiency and faster tree construction, the experiment uses only a subset of the training data to build the GMRA tree. The `tree_subset_ratio` parameter controls what fraction of the training data is used for tree construction:
+
+- **Default**: 10% of training data (`tree_subset_ratio: 0.1`)
+- **Small config**: 20% of training data (fewer samples overall)
+- **Tuning config**: 5% of training data (more samples available)
+
+The tree is built using this subset, but feature extraction is performed on the full training and test sets. This approach:
+- Reduces memory usage during tree construction
+- Speeds up tree building process
+- Still captures the underlying data structure for feature extraction
+- Allows processing of larger datasets
+
+You can adjust this parameter based on your memory constraints and performance needs:
+```bash
+# Use 5% of training data for tree building
+python gmra_classification_experiment.py gmra.tree_subset_ratio=0.05
+
+# Use 20% of training data for tree building
+python gmra_classification_experiment.py gmra.tree_subset_ratio=0.20
 ```
 
 ## Output Files
@@ -174,6 +216,7 @@ Then open http://localhost:6006 in your browser.
 - Number of leaf nodes
 - Tree height
 - Leaf size parameters
+- Tree subset ratio and sample count (for memory efficiency)
 
 ### Feature Extraction
 - GMRA feature dimensionality

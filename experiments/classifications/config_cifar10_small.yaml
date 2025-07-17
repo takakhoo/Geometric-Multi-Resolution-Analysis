@@ -1,13 +1,13 @@
-# Configuration for small-scale quick experiment
+# Configuration for small-scale CIFAR-10 experiment
 defaults:
-  - config
+  - config_cifar10
 
 experiment:
-  name: "gmra_classification_small"
-  description: "Small-scale GMRA classification experiment for quick testing"
+  name: "gmra_classification_cifar10_small"
+  description: "Small-scale GMRA vs PCA comparison on CIFAR-10 for quick testing"
 
 data:
-  num_points: 500  # Smaller dataset for quick testing
+  num_points: 1000  # Smaller dataset for quick testing
   
 gmra:
   leafsize: 20     # Larger leafsize for fewer nodes
@@ -19,6 +19,11 @@ classifiers:
   random_forest:
     n_estimators: 50  # Fewer trees
   
+  svm:
+    kernel: "rbf"
+    C: 1.0
+    gamma: "scale"
+    
   knn:
     n_neighbors: 3
     

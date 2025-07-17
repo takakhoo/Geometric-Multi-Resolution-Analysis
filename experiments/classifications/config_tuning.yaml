@@ -13,6 +13,7 @@ gmra:
   leafsize: 5       # Smaller leafsize for more detailed tree
   min_points: 5     # Lower minimum points for more nodes
   thresholds: 0.1   # Higher threshold for basis construction
+  tree_subset_ratio: 0.05  # Use 5% of training data for tree building
   
 classifiers:
   random_forest:

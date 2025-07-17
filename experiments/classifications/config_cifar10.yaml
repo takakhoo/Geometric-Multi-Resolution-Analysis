@@ -1,26 +1,25 @@
-# GMRA Classification Experiment Configuration
+# Configuration for CIFAR-10 classification experiment
 defaults:
-  - _self_
+  - config
 
 experiment:
-  name: "gmra_classification"
-  description: "GMRA feature extraction for MNIST classification"
-  seed: 42
+  name: "gmra_classification_cifar10"
+  description: "GMRA vs PCA comparison on CIFAR-10 dataset"
 
 data:
-  dataset: "mnist"
-  num_points: null  # Use all points from dataset
+  dataset: "cifar10"
+  num_points: 5000  # Use 5000 CIFAR-10 samples for comparison
   flatten: true
   test_size: 0.2
 
 gmra:
   leafsize: 10
   manifold_dims: 0
-  max_dim: null  # Will be set to data dimension if null
+  max_dim: null
   thresholds: 0.0
   precisions: 1e-2
   min_points: 10
-  tree_subset_ratio: 0.1  # Use 10% of training data to build tree
+  tree_subset_ratio: 0.1  # Use 10% of training data for tree building
 
 pca:
   n_components: 0.95  # Keep 95% of variance

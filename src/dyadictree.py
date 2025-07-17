@@ -748,6 +748,42 @@ class DyadicTree:
         
         return self
     
+    def prune_max_level(self, max_level):
+        """
+        Prune the tree by removing nodes that exceed the maximum level.
+        
+        Parameters
+        ----------
+        max_level : int
+            Maximum level allowed in the tree. Level 0 is the root.
+            Nodes at levels greater than max_level will be removed.
+            
+        Returns
+        -------
+        self : DyadicTree
+            Returns the instance itself after pruning.
+        """
+        def _prune_node_by_level(node, current_level):
+            """Recursively prune children that exceed max_level."""
+            if current_level >= max_level:
+                # Remove all children at this level or beyond
+                for child in node.children:
+                    child.parent = None
+                    logging.debug(f"Pruning child node at level {current_level + 1} with indices {child.idxs}")
+                node.children.clear()
+            else:
+                # Continue recursing for children that don't exceed max_level
+                for child in node.children:
+                    _prune_node_by_level(child, current_level + 1)
+        
+        # Start pruning from the root (level 0)
+        _prune_node_by_level(self.root, 0)
+        
+        # Update tree height after pruning
+        self._update_tree_height()
+        
+        return self
+    
     def _update_tree_height(self):
         """Update the tree height after pruning."""
         def _get_max_depth(node, current_depth=0):

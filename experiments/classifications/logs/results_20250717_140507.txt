@@ -1,0 +1,152 @@
+GMRA CLASSIFICATION EXPERIMENT RESULTS
+============================================================
+Timestamp: 2025-07-17 14:05:07
+Experiment: gmra_classification_tuning
+Dataset: MNIST
+Training samples: 1600
+Test samples: 400
+Features: 784
+Random seed: 42
+
+CONFIGURATION SUMMARY
+----------------------------------------
+GMRA leafsize: 5
+GMRA min_points: 5
+PCA components: 0.95
+Test size: 0.2
+
+Feature Type: Raw Pixels
+----------------------------------------
+  Classifier: Random Forest
+    Accuracy: 0.9200
+    Precision: 0.9226
+    Recall: 0.9200
+    F1-Score: 0.9195
+    Training Time: 1.0839s
+    Prediction Time: 0.0158s
+
+  Classifier: SVM
+    Accuracy: 0.9275
+    Precision: 0.9298
+    Recall: 0.9275
+    F1-Score: 0.9268
+    Training Time: 0.1565s
+    Prediction Time: 0.1283s
+
+  Classifier: KNN
+    Accuracy: 0.9000
+    Precision: 0.9085
+    Recall: 0.9000
+    F1-Score: 0.8998
+    Training Time: 0.0012s
+    Prediction Time: 0.3248s
+
+  Classifier: Naive Bayes
+    Accuracy: 0.5775
+    Precision: 0.6252
+    Recall: 0.5775
+    F1-Score: 0.5485
+    Training Time: 0.0043s
+    Prediction Time: 0.0051s
+
+  Classifier: Neural Network
+    Accuracy: 0.9225
+    Precision: 0.9250
+    Recall: 0.9225
+    F1-Score: 0.9224
+    Training Time: 1.5349s
+    Prediction Time: 0.0032s
+
+
+Feature Type: GMRA
+----------------------------------------
+  Classifier: Random Forest
+    Accuracy: 0.8575
+    Precision: 0.8654
+    Recall: 0.8575
+    F1-Score: 0.8569
+    Training Time: 3.1411s
+    Prediction Time: 0.0138s
+
+  Classifier: SVM
+    Accuracy: 0.8975
+    Precision: 0.9004
+    Recall: 0.8975
+    F1-Score: 0.8970
+    Training Time: 0.0681s
+    Prediction Time: 0.0511s
+
+  Classifier: KNN
+    Accuracy: 0.8800
+    Precision: 0.8911
+    Recall: 0.8800
+    F1-Score: 0.8803
+    Training Time: 0.0006s
+    Prediction Time: 0.0302s
+
+  Classifier: Naive Bayes
+    Accuracy: 0.7525
+    Precision: 0.7608
+    Recall: 0.7525
+    F1-Score: 0.7509
+    Training Time: 0.0028s
+    Prediction Time: 0.0020s
+
+  Classifier: Neural Network
+    Accuracy: 0.9125
+    Precision: 0.9141
+    Recall: 0.9125
+    F1-Score: 0.9120
+    Training Time: 1.3635s
+    Prediction Time: 0.0020s
+
+
+Feature Type: PCA
+----------------------------------------
+  Classifier: Random Forest
+    Accuracy: 0.8550
+    Precision: 0.8543
+    Recall: 0.8550
+    F1-Score: 0.8522
+    Training Time: 2.7101s
+    Prediction Time: 0.0167s
+
+  Classifier: SVM
+    Accuracy: 0.8400
+    Precision: 0.8889
+    Recall: 0.8400
+    F1-Score: 0.8510
+    Training Time: 0.2399s
+    Prediction Time: 0.0722s
+
+  Classifier: KNN
+    Accuracy: 0.8225
+    Precision: 0.8286
+    Recall: 0.8225
+    F1-Score: 0.8185
+    Training Time: 0.0008s
+    Prediction Time: 0.0265s
+
+  Classifier: Naive Bayes
+    Accuracy: 0.5925
+    Precision: 0.6652
+    Recall: 0.5925
+    F1-Score: 0.5687
+    Training Time: 0.0026s
+    Prediction Time: 0.0017s
+
+  Classifier: Neural Network
+    Accuracy: 0.8750
+    Precision: 0.8785
+    Recall: 0.8750
+    F1-Score: 0.8745
+    Training Time: 0.9080s
+    Prediction Time: 0.0031s
+
+
+SUMMARY
+==============================
+Best Overall: 0.9275 (Raw Pixels + SVM)
+Best Raw Pixels: 0.9275 (SVM)
+Best GMRA: 0.9125 (Neural Network)
+Best PCA: 0.8750 (Neural Network)

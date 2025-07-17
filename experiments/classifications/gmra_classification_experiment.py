@@ -97,7 +97,8 @@ def load_mnist_with_labels(num_points=1000, flatten=True):
     y = []
     
     for i, (img, label) in enumerate(mnist_train):
-        if i >= num_points:
+        # If num_points is None, use all data points
+        if num_points is not None and i >= num_points:
             break
         X.append(np.array(img.numpy()))
         y.append(label)
@@ -111,6 +112,45 @@ def load_mnist_with_labels(num_points=1000, flatten=True):
     
     logger.info(f"Loaded {len(X)} MNIST samples with shape {X.shape}")
     logger.info(f"Label distribution: {np.bincount(y)}")
+    
+    return X, y, original_shape
+
+def load_cifar10_with_labels(num_points=1000, flatten=True):
+    """Load CIFAR-10 data with labels for classification."""
+    from torchvision import datasets, transforms
+    
+    # Get a logger for this function
+    logger = logging.getLogger(__name__)
+    
+    transform = transforms.Compose([transforms.ToTensor()])
+    
+    # Load training data
+    cifar10_train = datasets.CIFAR10(root='../../datasets', train=True, download=True, transform=transform)
+    
+    # Extract images and labels
+    X = []
+    y = []
+    
+    for i, (img, label) in enumerate(cifar10_train):
+        # If num_points is None, use all data points
+        if num_points is not None and i >= num_points:
+            break
+        X.append(np.array(img.numpy()))
+        y.append(label)
+    
+    X = np.stack(X)
+    y = np.array(y)
+    
+    original_shape = X.shape
+    if flatten:
+        X = X.reshape(X.shape[0], -1)
+    
+    logger.info(f"Loaded {len(X)} CIFAR-10 samples with shape {X.shape}")
+    logger.info(f"Label distribution: {np.bincount(y)}")
+    
+    # CIFAR-10 class names for reference
+    class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+    logger.info(f"CIFAR-10 classes: {class_names}")
     
     return X, y, original_shape
 
@@ -143,11 +183,19 @@ class GMRAClassificationExperiment:
             if cfg.tensorboard.enabled:
                 self.logger.warning("TensorBoard not available - metrics will not be logged to TensorBoard")
         
-        # Load data
-        self.X, self.y, self.original_shape = load_mnist_with_labels(
-            num_points=cfg.data.num_points, 
-            flatten=cfg.data.flatten
-        )
+        # Load data based on dataset configuration
+        if cfg.data.dataset.lower() == "mnist":
+            self.X, self.y, self.original_shape = load_mnist_with_labels(
+                num_points=cfg.data.num_points, 
+                flatten=cfg.data.flatten
+            )
+        elif cfg.data.dataset.lower() == "cifar10":
+            self.X, self.y, self.original_shape = load_cifar10_with_labels(
+                num_points=cfg.data.num_points, 
+                flatten=cfg.data.flatten
+            )
+        else:
+            raise ValueError(f"Unsupported dataset: {cfg.data.dataset}. Supported datasets: mnist, cifar10")
         
         # Split data
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
@@ -189,8 +237,19 @@ class GMRAClassificationExperiment:
         cfg = self.cfg.gmra
         max_dim = cfg.max_dim if cfg.max_dim is not None else self.X_train.shape[-1]
         
+        # Use subset of training data for tree building
+        tree_subset_ratio = cfg.tree_subset_ratio
+        n_tree_samples = int(len(self.X_train) * tree_subset_ratio)
+        
+        # Create random indices for tree building subset
+        np.random.seed(self.cfg.experiment.seed)
+        tree_indices = np.random.choice(len(self.X_train), n_tree_samples, replace=False)
+        X_tree = self.X_train[tree_indices]
+        
+        self.logger.info(f"Using {n_tree_samples} samples ({tree_subset_ratio*100:.1f}%) for tree building from {len(self.X_train)} training samples")
+        
         # Create cover tree
-        cover_tree = CoverTree(self.X_train, euclidean, leafsize=cfg.leafsize)
+        cover_tree = CoverTree(X_tree, euclidean, leafsize=cfg.leafsize)
         
         # Create dyadic tree
         self.gmra_tree = DyadicTree(
@@ -208,7 +267,7 @@ class GMRAClassificationExperiment:
         
         # Fit the tree
         self.logger.info("Fitting GMRA tree...")
-        self.gmra_tree.fit(self.X_train)
+        self.gmra_tree.fit(X_tree)
         
         # Log tree statistics
         all_nodes = self.gmra_tree.get_all_nodes()
@@ -220,6 +279,8 @@ class GMRAClassificationExperiment:
             self.tb_writer.add_scalar('Tree/num_nodes', len(all_nodes), self.experiment_step)
             self.tb_writer.add_scalar('Tree/num_leafs', len(all_leafs), self.experiment_step)
             self.tb_writer.add_scalar('Tree/height', self.gmra_tree.height, self.experiment_step)
+            self.tb_writer.add_scalar('Tree/tree_subset_samples', n_tree_samples, self.experiment_step)
+            self.tb_writer.add_scalar('Tree/tree_subset_ratio', tree_subset_ratio, self.experiment_step)
             self.tb_writer.add_scalar('Tree/leafsize', cfg.leafsize, self.experiment_step)
             self.tb_writer.add_scalar('Tree/min_points', cfg.min_points, self.experiment_step)
         

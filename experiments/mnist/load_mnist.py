@@ -7,7 +7,11 @@ def load_dataset(flatten=False, num_points=1000):
     ])
 
     cifar10_train = datasets.MNIST(root='../../datasets', train=True, download=True, transform=transform)
-    X = np.stack([np.array(img[0].numpy()) for img in cifar10_train][:num_points])  # shape: (1000, 3, 32, 32)
+    
+    if num_points == -1:
+        X = np.stack([np.array(img[0].numpy()) for img in cifar10_train])
+    else:
+        X = np.stack([np.array(img[0].numpy()) for img in cifar10_train][:num_points])
 
     original_shape = X.shape
     if flatten:

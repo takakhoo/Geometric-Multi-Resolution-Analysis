@@ -1,0 +1,47 @@
+experiment:
+  name: gmra_classification_cifar10_small
+  description: Small-scale GMRA vs PCA comparison on CIFAR-10 for quick testing
+  seed: 42
+data:
+  dataset: cifar10
+  num_points: 1000
+  flatten: true
+  test_size: 0.2
+gmra:
+  leafsize: 20
+  manifold_dims: 0
+  max_dim: null
+  thresholds: 0.0
+  precisions: 0.01
+  min_points: 20
+  tree_subset_ratio: 0.2
+pca:
+  n_components: 0.95
+classifiers:
+  random_forest:
+    n_estimators: 50
+    max_depth: null
+    min_samples_split: 2
+    min_samples_leaf: 1
+  svm:
+    kernel: rbf
+    C: 1.0
+    gamma: scale
+  knn:
+    n_neighbors: 3
+    weights: uniform
+  naive_bayes:
+    var_smoothing: 1.0e-09
+  neural_network:
+    hidden_layer_sizes:
+    - 100
+    max_iter: 500
+    learning_rate_init: 0.001
+    alpha: 0.0001
+logging:
+  level: INFO
+  log_dir: logs
+  save_plots: true
+tensorboard:
+  enabled: true
+  log_dir: logs/tensorboard
