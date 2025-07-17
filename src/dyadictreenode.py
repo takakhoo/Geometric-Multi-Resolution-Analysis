@@ -78,7 +78,7 @@ class DyadicTreeNode:
                        threshold: float = 0.5,
                        precision: float = 1e-2) -> None:
         '''
-        X: (d,n)
+        X: (n,d) - rows are data points, columns are features
         '''
         # from construct_localGeometricWavelets.m
         Phijx = self.basis
@@ -103,5 +103,5 @@ class DyadicTreeNode:
                 tjx = c.center - self.center# (2.14)
                 c.wav_consts = tjx - Phijx.T @ Phijx @ tjx
             else:
-                c.wav_basis  = np.zeros((X.shape[0], 0)).T # (nxd)
-                c.wav_consts = np.zeros((X.shape[0], 1))
+                c.wav_basis  = np.zeros((X.shape[1], 0)).T # (nxd)
+                c.wav_consts = np.zeros((X.shape[1], 1))

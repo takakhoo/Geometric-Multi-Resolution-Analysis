@@ -17,7 +17,6 @@ class DyadicTree:
 
         # underlying cover tree
         self.cover_tree = cover_tree
-        self.idx_to_leaf_node = {}
 
         # Wavelet-related attributes
         self.j_k_to_node = {}
@@ -54,8 +53,7 @@ class DyadicTree:
 
     def build_tree(self, node, cover_node, level=1):
         """
-        Recursively build the DyadicTree from the CoverTree. 
-        Remember to update idx_to_leaf_node mapping.
+        Recursively build the DyadicTree from the CoverTree.
         """
         logging.debug(f"Building tree at level {level}, node indices: {DyadicTreeNode.get_idx_sublevel(cover_node)}")
 
@@ -70,11 +68,7 @@ class DyadicTree:
             # Update the current node's indices to match the leaf indices
             node.idxs = cover_node.idx
             
-            # Register this node as the leaf node in the mapping
-            for idx in cover_node.idx:
-                self.idx_to_leaf_node[idx] = node
-            
-            logging.debug(f"Registered leaf node at level {level} with indices: {cover_node.idx}")
+            logging.debug(f"Created leaf node at level {level} with indices: {cover_node.idx}")
         else:
             logging.debug(f"Processing internal node at level {level} with {len(cover_node.children)} children")
             for i, child in enumerate(cover_node.children):
@@ -329,10 +323,6 @@ class DyadicTree:
                 new_node = DyadicTreeNode(node.idxs, parent=node)
                 new_node.fake_node = True
 
-                # update the idx to leaf node mapping with the new  node
-                self.idx_to_leaf_node[node.idxs[0]] = new_node
-                #!#
-
                 # register and grow
                 node.add_child(new_node)
                 grow_node(new_node, current_level + 1)
@@ -346,16 +336,11 @@ class DyadicTree:
     
     def query_leaf(self, X):
         """
-        Query for the leaf that is closest to the data point using self.cover_tree
-        use the underlying cover tree
-        _,nn_idx = python_covertree.query(X_query)
-        then query node using self.idx_to_leaf_node[nn_idx]
-        X : numpy array of shape (n_samples, n_features)
+        Query for the leaf that is closest to the data point using self.cover_tree.
+        Since we're using brute force query now, this method is deprecated.
+        Use query_leaf_by_center instead.
         """
-
-        _, nn_idx = self.cover_tree.query(X)
-        leaf_nodes = [self.idx_to_leaf_node[idx] for idx in nn_idx]
-        return leaf_nodes
+        raise NotImplementedError("query_leaf is deprecated. Use query_leaf_by_center instead.")
 
     def query_leaf_by_center(self, X):
         """
@@ -490,7 +475,7 @@ class DyadicTree:
             logging.debug(f"Processing wavelets for level {j} with {len(nodes)} nodes")
             for i, node in enumerate(nodes):
                 logging.debug(f"Making transform for node {i+1}/{len(nodes)} at level {j}")
-                node.make_transform(X.T, 
+                node.make_transform(X, 
                                   self.manifold_dims[j] if j < len(self.manifold_dims) else self.manifold_dims[-1], 
                                   self.max_dim,
                                   self.thresholds[j] if j < len(self.thresholds) else self.thresholds[-1], 
@@ -577,9 +562,8 @@ class DyadicTree:
         '''
         logging.debug(f"Starting forward GMRA wavelet transform for {X.shape[0]} data points")
         
-        # leafs = self.query_leaf(X)
+        # Use brute force query by center
         leafs = self.query_leaf_by_center(X)
-
 
         leafs_jk = [(leaf.node_j, leaf.node_k) for leaf in leafs]
         
@@ -592,7 +576,7 @@ class DyadicTree:
                 logging.debug(f"Processing point {idx+1}/{len(leafs)}, leaf at (j={leaf.node_j}, k={leaf.node_k})")
             
             x = X[idx].reshape(1, -1)  #  a row
-            pjx = leaf.basis @ (x.T-leaf.center) 
+            pjx = leaf.basis @ (x.T - leaf.center) 
             qjx = leaf.wav_basis @ leaf.basis.T @ pjx
             # log qjx
             logging.debug(f"qjx: {qjx}")
@@ -724,18 +708,12 @@ class DyadicTree:
     def prune_tree_min_point(self, num_point):
         """
         Prune the tree by removing children that have fewer points than num_point.
-        When removing children, their indices are merged into the parent node,
-        and the idx_to_leaf_node mapping is updated to point to the parent.
-        
-        Note: After pruning, idx_to_leaf_node entries may point to internal nodes
-        (not necessarily leaves) if their children were pruned. This is the intended
-        behavior as these parent nodes now represent the pruned data points.
         
         Parameters
         ----------
         num_point : int
             Minimum number of points required for a node to remain in the tree.
-            Children with fewer points will be removed and their indices merged into parent.
+            Children with fewer points will be removed.
             
         Returns
         -------
@@ -756,24 +734,11 @@ class DyadicTree:
             
             # Remove children that don't meet the threshold
             for child in children_to_remove:
-                # Merge all indices from child and its subtree into parent
                 logging.debug(f"Pruning child node with indices {child.idxs} from parent node with indices {node.idxs}")
-                _merge_subtree_indices(child, node)
                 
                 # Remove child from parent's children list
                 node.children.remove(child)
                 child.parent = None
-
-        def _merge_subtree_indices(subtree_root, target_parent):
-            """
-            Update idx_to_leaf_node mapping to point child indices to the parent.
-            This recursively processes the entire subtree being pruned.
-            """
-            # Update idx_to_leaf_node mapping for all indices to point to target parent
-            for idx in subtree_root.idxs:
-                if idx in self.idx_to_leaf_node:
-                    self.idx_to_leaf_node[idx] = target_parent
-            
         
         # Start pruning from the root
         _prune_node(self.root)

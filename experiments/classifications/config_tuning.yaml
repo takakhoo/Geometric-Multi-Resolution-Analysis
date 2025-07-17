@@ -1,0 +1,29 @@
+# Configuration for hyperparameter tuning experiment
+defaults:
+  - config
+
+experiment:
+  name: "gmra_classification_tuning"
+  description: "GMRA classification with different hyperparameters"
+
+data:
+  num_points: 2000  # More data for better hyperparameter evaluation
+  
+gmra:
+  leafsize: 5       # Smaller leafsize for more detailed tree
+  min_points: 5     # Lower minimum points for more nodes
+  thresholds: 0.1   # Higher threshold for basis construction
+  
+classifiers:
+  random_forest:
+    n_estimators: 200  # More trees
+    max_depth: 10      # Limit depth
+    
+  svm:
+    C: 10.0           # Higher regularization
+    gamma: "auto"     # Different gamma setting
+    
+  neural_network:
+    hidden_layer_sizes: [200, 100]  # Deeper network
+    max_iter: 1000    # More iterations
+    learning_rate_init: 0.01  # Higher learning rate

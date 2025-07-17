@@ -1,0 +1,25 @@
+# Configuration for small-scale quick experiment
+defaults:
+  - config
+
+experiment:
+  name: "gmra_classification_small"
+  description: "Small-scale GMRA classification experiment for quick testing"
+
+data:
+  num_points: 500  # Smaller dataset for quick testing
+  
+gmra:
+  leafsize: 20     # Larger leafsize for fewer nodes
+  min_points: 20   # Higher minimum points
+  
+classifiers:
+  # Only test a few classifiers for speed
+  random_forest:
+    n_estimators: 50  # Fewer trees
+  
+  knn:
+    n_neighbors: 3
+    
+  naive_bayes:
+    var_smoothing: 1e-9
