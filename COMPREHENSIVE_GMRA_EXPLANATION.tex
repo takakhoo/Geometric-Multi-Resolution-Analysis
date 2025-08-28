@@ -1,0 +1,987 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{longtable}
+
+\geometry{margin=1in}
+
+\title{\textbf{Complete Beginner's Guide to GMRA (Geometric Multi-Resolution Analysis): \\ Understanding Every Line of Code for DARPA CASTLE}}
+\author{Taka Khoo \\ DARPA CASTLE Project with Kevin Limanta}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+\section{What is GMRA? (In Super Simple Terms)}
+
+\subsection{The Big Picture: Why We Need This}
+
+Imagine you have a huge pile of data points, like millions of dots scattered in 3D space. Each dot represents something important - maybe a person's voice, a picture, or a scientific measurement. The problem is that this data is so complex and high-dimensional that it's impossible to understand or work with directly.
+
+\textbf{The Problem:} High-dimensional data is like trying to navigate a city with 1000 different streets - it's overwhelming and confusing!
+
+\textbf{GMRA Solution:} GMRA is like a smart map that finds the hidden structure in your data. It's like discovering that all those confusing streets actually form a simple grid pattern, or that your data points lie on a curved surface (like a sphere) instead of being scattered randomly.
+
+\subsection{The Analogy: Understanding a Messy Room}
+
+Think of GMRA like organizing a messy room:
+\begin{itemize}
+    \item \textbf{Traditional Approach:} Try to remember where every single item is (impossible!)
+    \item \textbf{GMRA Approach:} 
+    \begin{itemize}
+        \item First, group similar items together (clothes in closet, books on shelf)
+        \item Then, organize each group by function (shirts vs pants, fiction vs non-fiction)
+        \item Finally, create a simple map: "Clothes are in the closet, organized by type"
+    \end{itemize}
+\end{itemize}
+
+\subsection{What We're Doing in DARPA CASTLE}
+
+In our DARPA CASTLE project with Kevin Limanta, we're using GMRA to:
+\begin{enumerate}
+    \item \textbf{Take graph data} (like social networks or computer networks)
+    \item \textbf{Convert it to numbers} using Graph Neural Networks (GCN/GraphSAGE)
+    \item \textbf{Apply GMRA} to find the hidden geometric structure
+    \item \textbf{Compare results} to see if GMRA helps with classification tasks
+\end{enumerate}
+
+\textbf{Why This Matters:} If GMRA can find hidden patterns in graph data, we can:
+\begin{itemize}
+    \item Detect cyber attacks more effectively
+    \item Understand social network dynamics
+    \item Improve recommendation systems
+    \item Make better predictions about network behavior
+\end{itemize}
+
+\section{Understanding the Mathematics Behind GMRA}
+
+\subsection{What is Multi-Resolution Analysis?}
+
+Multi-resolution analysis is like looking at something at different zoom levels:
+\begin{itemize}
+    \item \textbf{Zoom Level 1 (Far Away):} You see the big picture - maybe it's a forest
+    \item \textbf{Zoom Level 2 (Medium):} You see individual trees and clearings
+    \item \textbf{Zoom Level 3 (Close):} You see individual leaves and branches
+    \item \textbf{Zoom Level 4 (Very Close):} You see individual cells in the leaves
+\end{itemize}
+
+\textbf{The Key Insight:} Each zoom level reveals different information, and together they give you a complete understanding.
+
+\subsection{The Mathematical Foundation}
+
+\subsubsection{Manifolds: The Hidden Structure}
+
+A manifold is like a curved surface embedded in higher-dimensional space. Think of it like this:
+
+\textbf{Example 1: A Circle in 3D Space}
+\begin{itemize}
+    \item A circle is a 1-dimensional manifold (you only need 1 number to describe your position on it)
+    \item But it lives in 3D space (you need 3 coordinates: x, y, z)
+    \item The circle is the "hidden structure" - it's not random, it follows a pattern
+\end{itemize}
+
+\textbf{Example 2: A Sphere in 3D Space}
+\begin{itemize}
+    \item A sphere is a 2-dimensional manifold (you need 2 numbers: latitude and longitude)
+    \item But it lives in 3D space
+    \item The sphere is the "hidden structure" - all points lie on the surface
+\end{itemize}
+
+\subsubsection{The Mathematical Formula}
+
+For a point $x$ in high-dimensional space $\mathbb{R}^D$, GMRA finds:
+\begin{itemize}
+    \item A low-dimensional manifold $\mathcal{M}$ of dimension $d \ll D$
+    \item A mapping from the manifold to the data: $f: \mathcal{M} \rightarrow \mathbb{R}^D$
+    \item A way to represent any point as: $x \approx f(\pi_{\mathcal{M}}(x))$
+\end{itemize}
+
+Where $\pi_{\mathcal{M}}(x)$ is the projection of $x$ onto the manifold $\mathcal{M}$.
+
+\subsection{How GMRA Works: Step by Step}
+
+\subsubsection{Step 1: Cover Tree Construction}
+
+\textbf{What is a Cover Tree?}
+A cover tree is like building a hierarchy of neighborhoods around your data points.
+
+\textbf{The Analogy:} Think of it like organizing a library:
+\begin{itemize}
+    \item \textbf{Level 0 (Root):} The entire library
+    \item \textbf{Level 1:} Different sections (fiction, non-fiction, science)
+    \item \textbf{Level 2:} Subsections (mystery, romance, biography)
+    \item \textbf{Level 3:} Individual shelves
+    \item \textbf{Level 4:} Individual books
+\end{itemize}
+
+\textbf{The Mathematical Principle:} For any two points $x$ and $y$ at level $i$:
+$$d(x,y) \leq 2^i$$
+
+This means points at the same level are roughly the same distance apart.
+
+\subsubsection{Step 2: Dyadic Tree Construction}
+
+\textbf{What is a Dyadic Tree?}
+A dyadic tree is like organizing the cover tree into a binary structure where each node has at most 2 children.
+
+\textbf{The Analogy:} Like organizing a family tree:
+\begin{itemize}
+    \item \textbf{Root:} Grandparent
+    \item \textbf{Level 1:} Two parents
+    \item \textbf{Level 2:} Four children
+    \item \textbf{Level 3:} Eight grandchildren
+\end{itemize}
+
+\textbf{Why Dyadic?} Because it makes the tree balanced and efficient to traverse.
+
+\subsubsection{Step 3: Local Tangent Space Estimation}
+
+\textbf{What is a Tangent Space?}
+Think of a tangent space as the "flat approximation" of a curved surface at a specific point.
+
+\textbf{The Analogy:} Like standing on Earth:
+\begin{itemize}
+    \item The Earth is curved (like a manifold)
+    \item But at any point, the ground looks flat (like a tangent plane)
+    \item The tangent space is like this local flat approximation
+\end{itemize}
+
+\textbf{The Mathematics:} For each node in the dyadic tree, we:
+\begin{enumerate}
+    \item Find all data points assigned to that node
+    \item Compute the mean (center) of those points
+    \item Use PCA (Principal Component Analysis) to find the main directions of variation
+    \item These directions form the basis of the tangent space
+\end{enumerate}
+
+\subsubsection{Step 4: Multi-Resolution Representation}
+
+\textbf{What is Multi-Resolution?}
+Multi-resolution means representing the same data at different levels of detail.
+
+\textbf{The Analogy:} Like a digital image:
+\begin{itemize}
+    \item \textbf{Low Resolution:} You see the big picture but lose details
+    \item \textbf{High Resolution:} You see all the details but need more storage
+    \item \textbf{Multi-Resolution:} You have both - the big picture AND the details
+\end{itemize}
+
+\textbf{The Mathematics:} At each level $j$ of the tree, we have:
+\begin{itemize}
+    \item A set of centers $\{c_j^k\}_{k=1}^{K_j}$
+    \item A set of tangent spaces $\{T_j^k\}_{k=1}^{K_j}$
+    \item A mapping from any point $x$ to its local representation
+\end{itemize}
+
+\section{Understanding the Code Structure}
+
+\subsection{The Main Components}
+
+Our GMRA implementation has several key files:
+
+\begin{itemize}
+    \item \texttt{covertree.py} (39KB): Builds the hierarchical structure
+    \item \texttt{dyadictree.py} (37KB): Creates the binary tree organization
+    \item \texttt{dyadictreenode.py} (3.7KB): Individual tree nodes
+    \item \texttt{wavelettree.py} (15KB): Multi-resolution processing
+    \item \texttt{helpers.py} (5.6KB): Utility functions
+    \item \texttt{utils.py} (7.6KB): General utilities
+\end{itemize}
+
+\subsection{The Experimental Framework}
+
+The experiments are organized by dataset:
+\begin{itemize}
+    \item \texttt{classifications/}: Main classification experiments
+    \item \texttt{mnist/}: Handwritten digit experiments
+    \item \texttt{cifar10/}: Color image experiments
+    \item \texttt{medical\_img/}: Medical image analysis
+\end{itemize}
+
+\section{Breaking Down the Core Code}
+
+\subsection{The Cover Tree Implementation}
+
+Let's look at the heart of the cover tree in \texttt{covertree.py}:
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+class CoverTree:
+    def __init__(self, points, distance_func=None):
+        self.points = points
+        self.n = len(points)
+        self.distance_func = distance_func or self._default_distance
+        self.root = self._build_tree()
+\end{lstlisting}
+
+\textbf{What This Does:}
+\begin{itemize}
+    \item \texttt{points}: The data points we want to organize
+    \item \texttt{n}: How many points we have
+    \item \texttt{distance\_func}: How to measure distance between points
+    \item \texttt{root}: The top of our tree structure
+\end{itemize}
+
+\textbf{The Analogy:} Like setting up a filing system:
+\begin{itemize}
+    \item \texttt{points} = all the documents you need to organize
+    \item \texttt{n} = how many documents you have
+    \item \texttt{distance\_func} = how you decide if two documents are similar
+    \item \texttt{root} = the main filing cabinet
+\end{itemize}
+
+\subsection{The Tree Building Process}
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+def _build_tree(self):
+    if self.n == 0:
+        return None
+    
+    # Start with the first point as root
+    root = CoverTreeNode(self.points[0], level=0)
+    
+    # Add all other points
+    for i in range(1, self.n):
+        self._insert_point(root, self.points[i])
+    
+    return root
+\end{lstlisting}
+
+\textbf{What This Does Step by Step:}
+\begin{enumerate}
+    \item Check if we have any points (if not, return nothing)
+    \item Take the first point and make it the root (level 0)
+    \item For each remaining point, insert it into the tree
+    \item Return the complete tree structure
+\end{enumerate}
+
+\textbf{The Analogy:} Like organizing a party guest list:
+\begin{enumerate}
+    \item Check if anyone is coming (if not, no party!)
+    \item Put the first person on the VIP list (root)
+    \item For each additional person, figure out where they fit in the hierarchy
+    \item End up with a complete guest organization system
+\end{enumerate}
+
+\subsection{The Insertion Algorithm}
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+def _insert_point(self, node, point):
+    # Calculate distance from current node to new point
+    dist = self.distance_func(node.point, point)
+    
+    # Find the appropriate level for this point
+    level = self._find_level(dist)
+    
+    # Insert the point at the appropriate level
+    self._insert_at_level(node, point, level)
+\end{lstlisting}
+
+\textbf{What This Does:}
+\begin{enumerate}
+    \item Measure how far the new point is from the current node
+    \item Figure out what level this point should be at
+    \item Put the point in the right place in the tree
+\end{enumerate}
+
+\textbf{The Analogy:} Like organizing people by height at a party:
+\begin{enumerate}
+    \item Measure how tall the new person is
+    \item Figure out which height group they belong to (short, medium, tall)
+    \item Put them in the right section of the room
+\end{enumerate}
+
+\subsection{The Level Finding Logic}
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+def _find_level(self, distance):
+    # Use the cover tree property: d(x,y) <= 2^level
+    # So level = log2(distance)
+    if distance <= 0:
+        return 0
+    
+    level = int(np.log2(distance)) + 1
+    return max(0, level)
+\end{lstlisting}
+
+\textbf{What This Does:}
+\begin{enumerate}
+    \item Take the distance between two points
+    \item Use the cover tree property: $d(x,y) \leq 2^{\text{level}}$
+    \item Solve for level: $\text{level} = \log_2(distance)$
+    \item Make sure the level is at least 0
+\end{enumerate}
+
+\textbf{The Mathematics:} This comes from the cover tree property:
+$$d(x,y) \leq 2^{\text{level}}$$
+
+Taking the logarithm of both sides:
+$$\log_2(d(x,y)) \leq \text{level}$$
+
+So we set:
+$$\text{level} = \lfloor \log_2(d(x,y)) \rfloor + 1$$
+
+\textbf{The Analogy:} Like organizing books by thickness:
+\begin{itemize}
+    \item If books are 1 inch apart, they go in the same shelf (level 0)
+    \item If books are 2 inches apart, they go in different shelves (level 1)
+    \item If books are 4 inches apart, they go in different sections (level 2)
+    \item If books are 8 inches apart, they go in different rooms (level 3)
+\end{itemize}
+
+\section{Understanding the Dyadic Tree}
+
+\subsection{What is a Dyadic Tree?}
+
+A dyadic tree is like organizing the cover tree into a strict binary structure where each node has exactly 0 or 2 children.
+
+\textbf{The Analogy:} Like organizing a sports tournament:
+\begin{itemize}
+    \item \textbf{Round 1:} 8 teams play 4 games
+    \item \textbf{Round 2:} 4 winners play 2 games
+    \item \textbf{Round 3:} 2 winners play 1 game
+    \item \textbf{Champion:} 1 winner
+\end{itemize}
+
+\textbf{Why Dyadic?} Because it makes the tree perfectly balanced and efficient to process.
+
+\subsection{The Dyadic Tree Construction}
+
+Let's look at how we build the dyadic tree from the cover tree:
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+def build_tree(self, node, cover_node, level=1):
+    if level >= self.height:
+        self.height = level + 1
+    
+    if hasattr(cover_node, 'idx'):
+        # This is a leaf node - assign the indices
+        node.idxs = cover_node.idx
+    else:
+        # This is an internal node - process children
+        for i, child in enumerate(cover_node.children):
+            child_node = DyadicTreeNode(
+                DyadicTreeNode.get_idx_sublevel(child), 
+                parent=node
+            )
+            node.add_child(child_node)
+            self.build_tree(child_node, child, level + 1)
+\end{lstlisting}
+
+\textbf{What This Does Step by Step:}
+\begin{enumerate}
+    \item Check if we need to increase the tree height
+    \item If the cover node is a leaf (has data):
+    \begin{itemize}
+        \item Assign the data indices to this dyadic node
+    \end{itemize}
+    \item If the cover node is internal (has children):
+    \begin{itemize}
+        \item Create a dyadic node for each child
+    \item Connect them to the current node
+    \item Recursively build the subtree
+    \end{itemize}
+\end{enumerate}
+
+\textbf{The Analogy:} Like organizing a family reunion:
+\begin{enumerate}
+    \item Check if you need a bigger venue
+    \item If it's just one family (leaf):
+    \begin{itemize}
+        \item Put their name tags on the table
+    \end{itemize}
+    \item If it's multiple families (internal):
+    \begin{itemize}
+        \item Create a table for each family
+    \item Connect them to the main organizer
+    \item Recursively organize each family's seating
+    \end{itemize}
+\end{enumerate}
+
+\subsection{The Dyadic Tree Node}
+
+Each node in the dyadic tree stores important information:
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+class DyadicTreeNode:
+    def __init__(self, idxs, parent=None):
+        self.idxs = idxs          # Which data points belong here
+        self.parent = parent      # Parent node
+        self.children = []        # Child nodes
+        self.level = 0            # What level in the tree
+        self.center = None        # Center of the data points
+        self.tangent_space = None # Local tangent space
+\end{lstlisting}
+
+\textbf{What Each Field Means:}
+\begin{itemize}
+    \item \texttt{idxs}: The indices of data points assigned to this node
+    \item \texttt{parent}: The node above this one in the tree
+    \item \texttt{children}: The nodes below this one in the tree
+    \item \texttt{level}: How deep this node is in the tree
+    \item \texttt{center}: The average position of all data points in this node
+    \item \texttt{tangent\_space}: The local flat approximation of the manifold
+\end{itemize}
+
+\textbf{The Analogy:} Like organizing a library section:
+\begin{itemize}
+    \item \texttt{idxs}: Which books are in this section
+    \item \texttt{parent}: The main library building
+    \item \texttt{children}: The subsections within this section
+    \item \texttt{level}: Which floor this section is on
+    \item \texttt{center}: The middle of this section
+    \item \texttt{tangent\_space}: The layout map of this section
+\end{itemize}
+
+\section{Understanding the Wavelet Tree}
+
+\subsection{What are Wavelets?}
+
+Wavelets are like mathematical "microscopes" that can zoom in and out to see different levels of detail in data.
+
+\textbf{The Analogy:} Like looking at a painting:
+\begin{itemize}
+    \item \textbf{From far away:} You see the overall composition
+    \item \textbf{From medium distance:} You see the main objects and colors
+    \item \textbf{From close up:} You see individual brush strokes
+    \item \textbf{From very close:} You see individual paint molecules
+\end{itemize}
+
+\textbf{Why Wavelets?} Because they can represent data at multiple resolutions efficiently.
+
+\subsection{The Wavelet Tree Implementation}
+
+The wavelet tree processes the dyadic tree to create multi-resolution representations:
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+class WaveletTree:
+    def __init__(self, dyadic_tree, data):
+        self.dyadic_tree = dyadic_tree
+        self.data = data
+        self.wavelet_coeffs = {}
+        self._compute_wavelets()
+\end{lstlisting}
+
+\textbf{What This Does:}
+\begin{enumerate}
+    \item Take the dyadic tree structure
+    \item Take the original data
+    \item Create a dictionary to store wavelet coefficients
+    \item Compute the wavelet representations
+\end{enumerate}
+
+\textbf{The Analogy:} Like creating a photo album:
+\begin{enumerate}
+    \item Take the family tree structure
+    \item Take all the family photos
+    \item Create albums for different zoom levels
+    \item Organize photos by family groups and generations
+\end{enumerate}
+
+\section{Understanding the Experiments}
+
+\subsection{The Classification Experiments}
+
+The main experiments are in the \texttt{classifications/} directory. Let's look at the key file:
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+def gmra_classification_experiment():
+    # Load data
+    data = load_dataset()
+    
+    # Build GMRA tree
+    gmra_tree = build_gmra_tree(data)
+    
+    # Extract features at different levels
+    features_level_1 = extract_features(gmra_tree, level=1)
+    features_level_2 = extract_features(gmra_tree, level=2)
+    features_level_3 = extract_features(gmra_tree, level=3)
+    
+    # Train classifiers
+    classifier_original = train_classifier(data)
+    classifier_gmra = train_classifier(features_level_2)
+    
+    # Compare results
+    accuracy_original = evaluate(classifier_original, test_data)
+    accuracy_gmra = evaluate(classifier_gmra, test_data)
+    
+    print(f"Original accuracy: {accuracy_original:.3f}")
+    print(f"GMRA accuracy: {accuracy_gmra:.3f}")
+\end{lstlisting}
+
+\textbf{What This Experiment Does:}
+\begin{enumerate}
+    \item Load a dataset (like MNIST digits or CIFAR-10 images)
+    \item Build a GMRA tree from the data
+    \item Extract features at different resolution levels
+    \item Train classifiers on both original data and GMRA features
+    \item Compare how well each classifier performs
+\end{enumerate}
+
+\textbf{The Goal:} See if GMRA can find better features for classification than the raw data.
+
+\subsection{The MNIST Experiments}
+
+MNIST is a dataset of handwritten digits (0-9). The experiments test if GMRA can find better features for digit recognition.
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+def mnist_gmra_experiment():
+    # Load MNIST data
+    X_train, y_train = load_mnist()
+    
+    # Convert to GMRA features
+    gmra_features = apply_gmra(X_train)
+    
+    # Train and test
+    accuracy = train_and_test(gmra_features, y_train)
+    
+    return accuracy
+\end{lstlisting}
+
+\textbf{What MNIST Data Looks Like:}
+\begin{itemize}
+    \item Each image is 28x28 pixels (784 dimensions)
+    \item Each pixel has a value from 0 (black) to 255 (white)
+    \item The goal is to predict which digit (0-9) the image represents
+\end{itemize}
+
+\textbf{Why MNIST is Good for Testing:}
+\begin{itemize}
+    \item Simple and well-understood
+    \item High-dimensional (784 dimensions)
+    \item Clear structure (digits have consistent patterns)
+    \item Easy to evaluate (accuracy is straightforward)
+\end{itemize}
+
+\subsection{The CIFAR-10 Experiments}
+
+CIFAR-10 is a dataset of color images in 10 categories (airplane, car, bird, cat, deer, dog, frog, horse, ship, truck).
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+def cifar10_gmra_experiment():
+    # Load CIFAR-10 data
+    X_train, y_train = load_cifar10()
+    
+    # Convert to GMRA features
+    gmra_features = apply_gmra(X_train)
+    
+    # Train and test
+    accuracy = train_and_test(gmra_features, y_train)
+    
+    return accuracy
+\end{lstlisting}
+
+\textbf{What CIFAR-10 Data Looks Like:}
+\begin{itemize}
+    \item Each image is 32x32 pixels with 3 color channels (RGB)
+    \item Total dimensions: 32 × 32 × 3 = 3,072
+    \item Much more complex than MNIST (color, texture, shape)
+    \item More challenging for GMRA to find structure
+\end{itemize}
+
+\section{Understanding the DARPA CASTLE Workflow}
+
+\subsection{The Complete Pipeline}
+
+Based on Kevin's instructions, here's what we need to do:
+
+\begin{enumerate}
+    \item \textbf{Find a dataset} with undirected, weighted nodes
+    \item \textbf{Use GCN/GraphSAGE} to get embeddings in Euclidean space
+    \item \textbf{Apply GMRA} on embeddings to find lower-dimensional structure
+    \item \textbf{Do classification} and compare GMRA vs original results
+\end{enumerate}
+
+\subsection{Step 1: Finding the Right Dataset}
+
+\textbf{What We Need:}
+\begin{itemize}
+    \item \textbf{Undirected:} Connections go both ways (like Facebook friendships)
+    \item \textbf{Weighted:} Connections have different strengths (like how close friends are)
+    \item \textbf{Graph structure:} Nodes connected by edges
+\end{itemize}
+
+\textbf{Good Dataset Examples:}
+\begin{itemize}
+    \item \textbf{Social networks:} Facebook friends, Twitter followers
+    \item \textbf{Computer networks:} Internet routers, computer connections
+    \item \textbf{Biological networks:} Protein interactions, brain connections
+    \item \textbf{Transportation networks:} Cities connected by roads
+\end{itemize}
+
+\subsection{Step 2: Graph Neural Network Embeddings}
+
+\textbf{What is GCN/GraphSAGE?}
+Graph Neural Networks are like regular neural networks but designed to work with graph data.
+
+\textbf{The Analogy:} Like understanding a social network:
+\begin{itemize}
+    \item \textbf{Traditional approach:} Look at each person individually
+    \item \textbf{GNN approach:} Look at each person AND their friends AND their friends' friends
+\end{itemize}
+
+\textbf{What We Get:}
+\begin{itemize}
+    \item Each node gets converted to a vector of numbers (embedding)
+    \item Similar nodes get similar embeddings
+    \item The embeddings capture the graph structure
+\end{itemize}
+
+\subsection{Step 3: Applying GMRA}
+
+\textbf{What GMRA Does:}
+\begin{enumerate}
+    \item Takes the high-dimensional embeddings
+    \item Finds the hidden geometric structure
+    \item Creates a lower-dimensional representation
+    \item Preserves the important relationships
+\end{enumerate}
+
+\textbf{The Mathematics:} If our embeddings are in $\mathbb{R}^{100}$, GMRA might find they actually lie on a 10-dimensional manifold.
+
+\subsection{Step 4: Classification Comparison}
+
+\textbf{What We Compare:}
+\begin{itemize}
+    \item \textbf{Original embeddings:} High-dimensional, complex
+    \textbf{GMRA embeddings:} Lower-dimensional, structured
+\end{itemize}
+
+\textbf{How We Test:}
+\begin{enumerate}
+    \item Train a classifier on original embeddings
+    \item Train the same classifier on GMRA embeddings
+    \item Test both on the same test data
+    \item Compare accuracy, speed, and interpretability
+\end{enumerate}
+
+\section{Understanding the Code Implementation}
+
+\subsection{The Main Experiment Script}
+
+Let's look at the key parts of the classification experiment:
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+def main_experiment():
+    # Configuration
+    config = load_config()
+    
+    # Load data
+    data = load_dataset(config.dataset_name)
+    
+    # Build GMRA tree
+    cover_tree = CoverTree(data)
+    dyadic_tree = DyadicTree(cover_tree, data)
+    
+    # Extract features at different levels
+    features = {}
+    for level in range(dyadic_tree.height):
+        features[f'level_{level}'] = extract_level_features(dyadic_tree, level)
+    
+    # Train classifiers
+    results = {}
+    for level_name, level_features in features.items():
+        accuracy = train_and_evaluate(level_features, data.labels)
+        results[level_name] = accuracy
+    
+    # Save results
+    save_results(results)
+\end{lstlisting}
+
+\textbf{What This Does Step by Step:}
+\begin{enumerate}
+    \item Load configuration settings
+    \item Load the dataset
+    \item Build the GMRA tree structure
+    \item Extract features at each level of the tree
+    \item Train classifiers on each set of features
+    \item Save all the results for comparison
+\end{enumerate}
+
+\subsection{The Feature Extraction Function}
+
+\begin{lstlisting}[language=Python, basicstyle=\small]
+def extract_level_features(dyadic_tree, level):
+    features = []
+    
+    # Get all nodes at this level
+    level_nodes = get_nodes_at_level(dyadic_tree, level)
+    
+    for node in level_nodes:
+        if node.center is not None:
+            # Use the center as a feature
+            features.append(node.center)
+        else:
+            # Compute center from data points
+            center = compute_center(node.idxs)
+            features.append(center)
+    
+    return np.array(features)
+\end{lstlisting}
+
+\textbf{What This Does:}
+\begin{enumerate}
+    \item Get all nodes at the specified level
+    \item For each node, extract its center point
+    \item If the center isn't pre-computed, compute it
+    \item Return all centers as a feature matrix
+\end{enumerate}
+
+\textbf{The Analogy:} Like creating a map of a city:
+\begin{enumerate}
+    \item Get all neighborhoods at a certain zoom level
+    \item For each neighborhood, find its center point
+    \item If the center isn't marked, calculate it
+    \item Create a map showing all neighborhood centers
+\end{enumerate}
+
+\section{Understanding the Results and Output}
+
+\subsection{What Gets Saved}
+
+Every experiment saves several types of results:
+
+\begin{itemize}
+    \item \texttt{accuracy\_results.csv}: Classification accuracy for each method
+    \item \texttt{feature\_dimensions.csv}: How many dimensions each method uses
+    \item \texttt{training\_time.csv}: How long each method takes to train
+    \item \texttt{visualizations/}: Plots showing the results
+    \item \texttt{model\_checkpoints/}: Saved models for later use
+\end{itemize}
+
+\subsection{How to Interpret Results}
+
+\subsubsection{Accuracy Comparison}
+
+The main metric is classification accuracy:
+\begin{itemize}
+    \item \textbf{Original embeddings:} How well the raw data performs
+    \textbf{GMRA level 1:} How well the coarsest GMRA features perform
+    \item \textbf{GMRA level 2:} How well medium-resolution GMRA features perform
+    \textbf{GMRA level 3:} How well the finest GMRA features perform
+\end{itemize}
+
+\textbf{What Good Results Look Like:}
+\begin{itemize}
+    \item GMRA features perform similarly to or better than original features
+    \item Lower-dimensional GMRA features still give good accuracy
+    \item Training time is faster with GMRA features
+\end{itemize}
+
+\subsubsection{Dimensionality Reduction}
+
+\textbf{What to Look For:}
+\begin{itemize}
+    \item How much can we reduce dimensions without losing accuracy?
+    \item Is there a sweet spot where we get the best accuracy/dimension trade-off?
+    \item Do different levels of GMRA give different trade-offs?
+\end{itemize}
+
+\subsubsection{Training Time}
+
+\textbf{What to Compare:}
+\begin{itemize}
+    \item Time to train on original embeddings
+    \item Time to train on GMRA features
+    \item Time to build the GMRA tree
+    \item Overall end-to-end time
+\end{itemize}
+
+\section{Common Problems and Solutions}
+
+\subsection{Problem 1: Out of Memory}
+
+\textbf{Symptoms:}
+\begin{itemize}
+    \item CUDA out of memory error
+    \item Process crashes
+    \item Very slow performance
+\end{itemize}
+
+\textbf{Solutions:}
+\begin{itemize}
+    \item Reduce dataset size (start with small subset)
+    \item Use smaller batch sizes
+    \item Reduce the number of GMRA levels
+    \item Use CPU instead of GPU (slower but more memory)
+\end{itemize}
+
+\subsection{Problem 2: Poor Classification Results}
+
+\textbf{Symptoms:}
+\begin{itemize}
+    \item GMRA features perform much worse than original
+    \item Accuracy is very low
+    \item No improvement from different levels
+\end{itemize}
+
+\textbf{Solutions:}
+\begin{itemize}
+    \item Check if the data has clear geometric structure
+    \item Try different GMRA parameters
+    \item Use different distance functions
+    \item Check if the data preprocessing is correct
+\end{itemize}
+
+\subsection{Problem 3: GMRA Tree Construction Fails}
+
+\textbf{Symptoms:}
+\begin{itemize}
+    \item Tree building crashes
+    \item Very unbalanced tree structure
+    \item All points end up in one node
+\end{itemize}
+
+\textbf{Solutions:}
+\begin{itemize}
+    \item Check the distance function
+    \item Normalize the data properly
+    \item Adjust the cover tree parameters
+    \item Check for data quality issues
+\end{itemize}
+
+\section{How to Contribute to the Project}
+
+\subsection{What You Should Do First}
+
+\begin{enumerate}
+    \item \textbf{Understand the basics:} Read this document thoroughly
+    \item \textbf{Run simple experiments:} Start with MNIST or small datasets
+    \item \textbf{Analyze results:} Look at the plots and understand what they mean
+    \item \textbf{Try different parameters:} Experiment with GMRA settings
+    \item \textbf{Document findings:} Keep notes on what works and what doesn't
+\end{enumerate}
+
+\subsection{Areas for Improvement}
+
+\begin{itemize}
+    \item \textbf{Better distance functions:} Find more effective ways to measure similarity
+    \textbf{Adaptive tree building:} Automatically adjust parameters based on data
+    \item \textbf{Multi-scale features:} Combine features from multiple levels
+    \textbf{Interpretability:} Understand what the GMRA features actually represent
+    \item \textbf{Scaling:} Make it work with larger datasets
+\end{itemize}
+
+\subsection{Research Questions to Explore}
+
+\begin{itemize}
+    \item \textbf{What types of data work best with GMRA?} When does it fail?
+    \textbf{How does GMRA compare to other dimensionality reduction methods?}
+    \item \textbf{Can we predict which GMRA level will work best?}
+    \textbf{How does GMRA perform on different types of graphs?}
+    \item \textbf{What makes GMRA features interpretable?}
+\end{itemize}
+
+\section{Understanding the Big Picture}
+
+\subsection{Why This Research Matters}
+
+\begin{itemize}
+    \item \textbf{Privacy Protection:} GMRA can help find structure without revealing individual data
+    \textbf{Computational Efficiency:} Lower-dimensional features are faster to process
+    \item \textbf{Interpretability:} GMRA features often have clear geometric meaning
+    \textbf{Robustness:} GMRA can be more robust to noise and outliers
+    \item \textbf{Scientific Discovery:} Finding hidden structure reveals new insights
+\end{itemize}
+
+\subsection{The Broader Context}
+
+This work fits into several larger research areas:
+\begin{itemize}
+    \item \textbf{Geometric Deep Learning:} Using geometry to understand deep learning
+    \textbf{Manifold Learning:} Finding low-dimensional structure in high-dimensional data
+    \item \textbf{Multi-Resolution Analysis:} Understanding data at different scales
+    \textbf{Graph Neural Networks:} Learning from graph-structured data
+    \item \textbf{Dimensionality Reduction:} Making high-dimensional data manageable
+\end{itemize}
+
+\subsection{Your Role in the DARPA CASTLE Project}
+
+As a researcher on this project, you should:
+\begin{itemize}
+    \item \textbf{Understand the code:} Know what every function does
+    \textbf{Run experiments:} Test different datasets and parameters
+    \item \textbf{Analyze results:} Figure out what the numbers mean
+    \textbf{Identify patterns:} Find what makes GMRA work or fail
+    \item \textbf{Propose improvements:} Suggest ways to make the system better
+    \textbf{Document everything:} Keep detailed notes for the research team
+\end{itemize}
+
+\section{Conclusion}
+
+\subsection{What You Should Know Now}
+
+After reading this document, you should understand:
+\begin{itemize}
+    \item What GMRA is and why it's useful
+    \item How the mathematics behind GMRA works
+    \item What every function in the code does
+    \item How to run experiments and interpret results
+    \item The DARPA CASTLE workflow and goals
+    \item How to contribute to improving the system
+\end{itemize}
+
+\subsection{Next Steps}
+
+\begin{enumerate}
+    \item \textbf{Read the code:} Go through each file line by line
+    \textbf{Run experiments:} Start with simple cases and build up
+    \item \textbf{Ask questions:} Don't hesitate to ask for clarification
+    \textbf{Take notes:} Document everything you learn
+    \item \textbf{Think critically:} Question assumptions and look for improvements
+    \textbf{Contribute ideas:} Share your insights with Kevin and the team
+\end{enumerate}
+
+\subsection{Remember}
+
+\begin{itemize}
+    \item \textbf{There are no stupid questions:} If something isn't clear, ask!
+    \textbf{Start simple:} Don't try to understand everything at once
+    \item \textbf{Practice makes perfect:} Run lots of experiments
+    \textbf{Document everything:} Your notes will help others and yourself
+    \item \textbf{Think like a scientist:} Form hypotheses and test them
+    \textbf{Have fun:} This is cutting-edge research - enjoy it!
+\end{itemize}
+
+\section{Glossary}
+
+\begin{description}
+    \item[GMRA] Geometric Multi-Resolution Analysis - a method for finding low-dimensional structure in high-dimensional data
+    \item[Manifold] A curved surface embedded in higher-dimensional space
+    \item[Cover Tree] A hierarchical data structure for organizing points by distance
+    \item[Dyadic Tree] A binary tree structure where each node has at most 2 children
+    \item[Tangent Space] A local flat approximation of a curved surface
+    \item[Wavelet] A mathematical function for multi-resolution analysis
+    \item[Embedding] A vector representation of data in a lower-dimensional space
+    \item[GCN] Graph Convolutional Network - a type of graph neural network
+    \item[GraphSAGE] A method for learning node embeddings in graphs
+    \item[Multi-resolution] Analysis at multiple levels of detail
+    \item[PCA] Principal Component Analysis - a method for dimensionality reduction
+    \item[Euclidean Space] A space where distance is measured by straight lines
+\end{description}
+
+\section{References and Further Reading}
+
+\begin{itemize}
+    \item \textbf{GMRA Foundation Paper:} \url{https://arxiv.org/abs/1105.4924}
+    \item \textbf{Cover Trees:} \url{https://dl.acm.org/doi/10.1145/1143844.1143859}
+    \item \textbf{Graph Neural Networks:} \url{https://arxiv.org/abs/1901.00596}
+    \item \textbf{Manifold Learning:} \url{https://arxiv.org/abs/1406.2083}
+    \item \textbf{Wavelet Analysis:} \url{https://en.wikipedia.org/wiki/Wavelet}
+    \item \textbf{DARPA CASTLE:} \url{https://www.darpa.mil/program/cyber-assured-system-engineering}
+\end{itemize}
+
+\end{document}
